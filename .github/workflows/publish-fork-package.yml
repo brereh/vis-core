@@ -63,7 +63,8 @@ jobs:
 
       - name: Publish to GitHub Packages
         working-directory: packages/vis-core
-        run: npm publish --ignore-scripts
+        # npm 11 needs an explicit tag for prerelease versions; latest is the newest fork build.
+        run: npm publish --ignore-scripts --tag latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
