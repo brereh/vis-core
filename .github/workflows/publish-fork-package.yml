@@ -1,0 +1,76 @@
+name: Publish fork package
+
+# Builds this fork's dev branch and publishes it to GitHub Packages as @brereh/vis-core,
+# so projects can install fork changes before they are released upstream.
+# Version: <package.json version>-brereh.<run number>, for example 0.14.0-brereh.3. Each
+# published version is tagged fork-v<version> on the commit it was built from.
+# Runs only in brereh/vis-core; upstream releases stay with the main workflow.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'dev'
+
+concurrency:
+  group: publish-fork-package
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'brereh/vis-core'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@brereh'
+          cache: 'npm'
+          cache-dependency-path: 'packages/vis-core/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: packages/vis-core
+        run: npm ci
+
+      - name: Run tests
+        working-directory: packages/vis-core
+        run: npm test
+        env:
+          CI: true
+
+      - name: Build package
+        working-directory: packages/vis-core
+        run: npm run build
+
+      - name: Set fork name and version
+        id: version
+        working-directory: packages/vis-core
+        run: |
+          base=$(node -p "require('./package.json').version")
+          version="${base}-brereh.${GITHUB_RUN_NUMBER}"
+          npm pkg set name=@brereh/vis-core version="$version" \
+            repository.type=git repository.url="git+https://github.com/${GITHUB_REPOSITORY}.git"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub Packages
+        working-directory: packages/vis-core
+        run: npm publish --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag the published commit
+        env:
+          TAG: fork-v${{ steps.version.outputs.version }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+          echo "Published @brereh/vis-core@${TAG#fork-v} from ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
