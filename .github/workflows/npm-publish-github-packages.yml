@@ -63,7 +63,9 @@ jobs:
 
   publish:
     needs: test_job
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    # Forks publish with publish-fork-package.yml instead: they have no release bot secrets
+    # and cannot publish under the @transport-for-the-north scope.
+    if: github.repository_owner == 'Transport-for-the-North' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     permissions:
       contents: write
