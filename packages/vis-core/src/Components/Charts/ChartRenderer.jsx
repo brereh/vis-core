@@ -18,6 +18,7 @@ import {
   Area as RArea,
   ScatterChart as RScatterChart,
   Scatter as RScatter,
+  ReferenceArea as RReferenceArea,
 } from "recharts";
 import styled, { css, useTheme } from "styled-components";
 import { WarningBox } from "Components/MessageBox";
@@ -25,6 +26,16 @@ import { TransitionGroup, CSSTransition } from "react-transition-group";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { CARD_CONSTANTS, defaultBgColour, brandTokens } from "defaults";
 import { formatNumber, formatValueWithUnit } from "utils";
+import {
+  parseTimeValue,
+  parseTickInterval,
+  formatTimeValue,
+  buildTimeTicks,
+  isClockTime,
+  resolveColourToken,
+  bandToneColour,
+  normaliseRanges,
+} from "./lineChartTime";
 import { HeatmapChart } from "./HeatmapChart";
 const { CARD_WIDTH, PADDING, TOGGLE_BUTTON_WIDTH, TOGGLE_BUTTON_HEIGHT } =
   CARD_CONSTANTS;
@@ -75,6 +86,18 @@ const ChartContainer = styled.div`
   gap: 8px;
   margin-top: 4px;
   font-family: var(--font-sans);
+`;
+
+const VisuallyHidden = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;
 
 const Title = styled.h3`
@@ -308,6 +331,7 @@ export const ChartTooltip = ({
   label,
   config = {},
   formatter,
+  labelFormatter,
   coordinate,
 }) => {
   const theme = useTheme();
@@ -375,6 +399,7 @@ export const ChartTooltip = ({
   if (!active || !payload || !payload.length) return null;
 
   const unit = config.units && config.units !== "none" ? config.units : "";
+  const displayLabel = labelFormatter ? labelFormatter(label) : label;
 
   const tooltipElement = (
     <div
@@ -396,9 +421,9 @@ export const ChartTooltip = ({
         zIndex: 99999,
       }}
     >
-      {label && (
+      {displayLabel && (
         <div style={{ fontWeight: 700, marginBottom: 4, color: primaryColor }}>
-          {label}
+          {displayLabel}
         </div>
       )}
       {payload.map((item, i) => {
@@ -488,6 +513,8 @@ export const ChartTooltip = ({
  * @param {string|object}  xAxisTitle  - Optional label rendered below the X axis
  * @param {string|object}  yAxisTitle  - Optional label rendered beside the Y axis
  * @param {string}  rightYAxisTitle  - Optional label rendered beside the right Y axis
+ * @param {React.ReactNode} [description] - Optional visually hidden content describing the chart
+ * @param {string} [descriptionId] - Id for the description, referenced by aria-describedby
  * @param {React.ReactNode} children - Chart components to render inside
  * @returns {JSX.Element}
  */
@@ -498,6 +525,8 @@ const ChartSection = ({
   xAxisTitle,
   yAxisTitle,
   rightYAxisTitle,
+  description,
+  descriptionId,
   children,
 }) => {
   const yAxisObj =
@@ -514,7 +543,10 @@ const ChartSection = ({
       : { title: xAxisTitle, unit: "" };
 
   return (
-    <Section aria-label={ariaLabel}>
+    <Section
+      aria-label={ariaLabel}
+      aria-describedby={description && descriptionId ? descriptionId : undefined}
+    >
       {title && <Title>{title}</Title>}
       <div style={{ display: "flex", alignItems: "stretch" }}>
         {yAxisObj.title && (
@@ -598,6 +630,9 @@ const ChartSection = ({
             </span>
           )}
         </AxisLabel>
+      )}
+      {description && (
+        <VisuallyHidden id={descriptionId}>{description}</VisuallyHidden>
       )}
     </Section>
   );
@@ -691,13 +726,18 @@ const CategoryTick = ({ x, y, payload, angle = 0 }) => {
  * Transforms configuration columns and data into series format for Recharts
  * @param {Object} config - Chart configuration containing columns definition
  * @param {Object} data - Raw data object with values
+ * @param {Object} [options]
+ * @param {boolean} [options.keepNulls] - Keep null/undefined values as null instead of 0
  * @returns {Array} - Array of series objects with key, label, value, color, and title
  */
-const toSeries = (config, data) =>
+const toSeries = (config, data, { keepNulls = false } = {}) =>
   (config.columns || []).map((col, idx) => ({
     key: col.key,
     label: col.label ?? col.key,
-    value: getValue(data, col.key),
+    value:
+      keepNulls && (data?.[col.key] === null || data?.[col.key] === undefined)
+        ? null
+        : getValue(data, col.key),
     color: col.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length],
     title: col.title,
   }));
@@ -708,11 +748,12 @@ const toSeries = (config, data) =>
  * toSeries which handles a fixed set of category columns.
  *
  * @param {Array<{year: number|string, value: number}>} data - Array of time-series points
+ * @param {string} [xKey] - Field holding the x value (default: "year")
  * @returns {Array} - Array of series objects with label and value
  */
-const toTimeSeries = (data) =>
+const toTimeSeries = (data, xKey) =>
   (data || []).map((point) => ({
-    label: String(point.year),
+    label: String(xKey ? point[xKey] ?? point.label ?? point.year : point.year),
     value: point.value,
     dmValue: point.dmValue ?? null,
   }));
@@ -1006,6 +1047,223 @@ const BarChartMultiple = ({
 };
 
 /**
+ * Candidate tick intervals used when a time axis has no `tickInterval`.
+ * @constant {Array<number>}
+ */
+const AUTO_TIME_INTERVALS = [
+  15, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080,
+].map((minutes) => minutes * 60 * 1000);
+
+/**
+ * Returns true when a line chart config uses any of the time axis, gap or
+ * band options. Charts without them render exactly as before.
+ * @param {Object} config
+ * @returns {boolean}
+ */
+const hasLineEnhancements = (config) =>
+  config?.xAxis?.type === "time" ||
+  (Array.isArray(config?.bands) && config.bands.length > 0) ||
+  (Array.isArray(config?.gaps) && config.gaps.length > 0);
+
+/**
+ * Shared preparation for the optional `xAxis: { type: "time" }`, `bands`
+ * and `gaps` config on `line` and `multiple_line` charts.
+ *
+ * @param {Object} config - Chart configuration
+ * @param {Array} items - Rows to plot
+ * @param {string} xKey - Field holding the x value in each row
+ * @param {Object} theme - styled-components theme
+ * @param {string|number} [yAxisId] - Y axis the bands and gaps are drawn against
+ * @returns {Object} Data, axis props and overlay elements for the chart
+ */
+const useLineChartEnhancements = (config, items, xKey, theme, yAxisId) => {
+  const reactId = React.useId();
+  const idBase = `vc-line-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const xAxisConfig = config.xAxis || {};
+  const isTime = xAxisConfig.type === "time";
+
+  const timeData = React.useMemo(() => {
+    if (!isTime) return null;
+    const rows = (items || [])
+      .map((row) => ({ ...row, __x: parseTimeValue(row[xKey]) }))
+      .filter((row) => row.__x !== null)
+      .sort((a, b) => a.__x - b.__x);
+    const firstRaw = (items || []).find(
+      (row) => row[xKey] !== null && row[xKey] !== undefined
+    )?.[xKey];
+    const clock = isClockTime(firstRaw);
+    const utc = clock || xAxisConfig.utc === true;
+    const xs = rows.map((r) => r.__x);
+    const [domainFrom, domainTo] = Array.isArray(xAxisConfig.domain)
+      ? xAxisConfig.domain.map(parseTimeValue)
+      : [null, null];
+    const min = domainFrom ?? (xs.length ? Math.min(...xs) : 0);
+    const max = domainTo ?? (xs.length ? Math.max(...xs) : 0);
+    const span = max - min;
+    const format =
+      xAxisConfig.format || (clock || span <= 24 * 60 * 60 * 1000 ? "HH:mm" : "DD/MM HH:mm");
+    const tooltipFormat =
+      xAxisConfig.tooltipFormat || (clock ? "HH:mm" : "DD/MM/YYYY HH:mm");
+    const interval =
+      parseTickInterval(xAxisConfig.tickInterval) ||
+      AUTO_TIME_INTERVALS.find((ms) => span / ms <= 8) ||
+      AUTO_TIME_INTERVALS[AUTO_TIME_INTERVALS.length - 1];
+    const ticks = buildTimeTicks(min, max, interval, { utc });
+    const formatOptions = { clock, utc };
+    return {
+      rows,
+      min,
+      max,
+      ticks,
+      formatTick: (v) => formatTimeValue(Number(v), format, formatOptions),
+      formatLabel: (v) =>
+        v === null || v === undefined || v === ""
+          ? ""
+          : formatTimeValue(Number(v), tooltipFormat, formatOptions),
+    };
+  }, [isTime, items, xKey, xAxisConfig]);
+
+  const bands = React.useMemo(
+    () => normaliseRanges(config.bands, isTime),
+    [config.bands, isTime]
+  );
+  const gaps = React.useMemo(
+    () => normaliseRanges(config.gaps, isTime),
+    [config.gaps, isTime]
+  );
+
+  const textColour = theme?.colors?.text || "var(--text-icon)";
+  const warningColour = resolveColourToken("warning", theme);
+  const hatchId = `${idBase}-hatch`;
+  const labelStyle = { fontSize: DEFAULTS.DIMENSIONS.tickFontSize };
+  const formatRangeValue = (v) => (isTime ? timeData.formatLabel(v) : String(v));
+
+  const overlays = [];
+  if (gaps.length) {
+    overlays.push(
+      <defs key="vc-gap-defs">
+        <pattern
+          id={hatchId}
+          width="6"
+          height="6"
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(45)"
+        >
+          <line
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="6"
+            stroke={warningColour}
+            strokeWidth="1.5"
+            strokeOpacity="0.45"
+          />
+        </pattern>
+      </defs>
+    );
+  }
+  bands.forEach((band, i) => {
+    const tone = ["accent", "muted", "warning"].includes(band.tone)
+      ? band.tone
+      : "accent";
+    overlays.push(
+      <RReferenceArea
+        key={`vc-band-${i}`}
+        className="vc-line-band"
+        yAxisId={yAxisId}
+        x1={band.x1}
+        x2={band.x2}
+        fill={bandToneColour(tone, theme)}
+        fillOpacity={tone === "muted" ? 0.6 : 0.15}
+        strokeOpacity={0}
+        ifOverflow="hidden"
+        label={
+          band.label
+            ? { value: band.label, position: "top", fill: textColour, ...labelStyle }
+            : undefined
+        }
+      />
+    );
+  });
+  gaps.forEach((gap, i) => {
+    overlays.push(
+      <RReferenceArea
+        key={`vc-gap-${i}`}
+        className="vc-line-gap"
+        yAxisId={yAxisId}
+        x1={gap.x1}
+        x2={gap.x2}
+        fill={`url(#${hatchId})`}
+        fillOpacity={1}
+        stroke={warningColour}
+        strokeOpacity={0.6}
+        strokeDasharray="3 3"
+        ifOverflow="hidden"
+        label={
+          gap.label
+            ? { value: gap.label, position: "top", fill: warningColour, ...labelStyle }
+            : undefined
+        }
+      />
+    );
+  });
+
+  const descriptionId = `${idBase}-ranges`;
+  const description =
+    bands.length || gaps.length ? (
+      <ul aria-label="Highlighted ranges">
+        {bands.map((band, i) => (
+          <li key={`band-${i}`}>
+            {`Shaded band: ${band.label || "Highlighted range"}, ${formatRangeValue(
+              band.x1
+            )} to ${formatRangeValue(band.x2)}`}
+          </li>
+        ))}
+        {gaps.map((gap, i) => (
+          <li key={`gap-${i}`}>
+            {`Missing data: ${gap.label || "No data"}, ${formatRangeValue(
+              gap.x1
+            )} to ${formatRangeValue(gap.x2)}`}
+          </li>
+        ))}
+      </ul>
+    ) : null;
+
+  const xAxisProps = isTime
+    ? {
+        dataKey: "__x",
+        type: "number",
+        scale: "linear",
+        domain: [timeData.min, timeData.max],
+        ticks: timeData.ticks,
+        tickFormatter: timeData.formatTick,
+        interval: 0,
+        angle: 0,
+        textAnchor: "middle",
+        height: DEFAULTS.DIMENSIONS.xAxisMinHeight,
+        allowDataOverflow: true,
+      }
+    : null;
+
+  const hasRangeLabels = [...bands, ...gaps].some((r) => r.label);
+
+  return {
+    enabled: hasLineEnhancements(config),
+    data: isTime ? timeData.rows : items,
+    xAxisProps,
+    overlays,
+    description,
+    descriptionId,
+    topMargin: hasRangeLabels ? 16 : null,
+    // Leave room for the last time tick label, which sits on the plot edge.
+    rightMargin: isTime ? 16 : null,
+    // Range labels sit above the plot, so the legend moves below it.
+    legendAlign: hasRangeLabels ? "bottom" : "top",
+    labelFormatter: isTime ? timeData.formatLabel : undefined,
+  };
+};
+
+/**
  * Renders a responsive line chart using Recharts
  * @param {Object} props - Component props
  * @param {Object} props.config - Chart configuration object
@@ -1015,23 +1273,45 @@ const BarChartMultiple = ({
  * @param {string} [props.config.comparatorKey] - Data key for the comparator line (default: "dmValue")
  * @param {string} [props.config.comparatorLabel] - Label for the comparator line (default: "Comparator")
  * @param {string} [props.config.comparatorColor] - Stroke colour for the comparator line (default: brand grey)
- * @param {string} [props.config.lineColor] - Stroke colour for the primary line
+ * @param {string} [props.config.lineColor] - Stroke colour for the primary line (hex or theme token name)
+ * @param {string} [props.config.xKey] - Field holding the x value on a time axis (default: "time", then "label", then "year")
+ * @param {Object} [props.config.xAxis] - Optional `{ type: "time", format, tickInterval, domain, tooltipFormat, utc }`
+ * @param {boolean} [props.config.connectNulls] - Draw lines across null values (default: false)
+ * @param {Array} [props.config.bands] - Optional shaded ranges `{ from, to, label, tone }`
+ * @param {Array} [props.config.gaps] - Optional missing-data ranges `{ from, to, label }`
+ * @param {Array} [props.config.series] - Optional `[{ colour }]` for the primary and comparator lines
  * @param {Object} props.data - Data object containing values to chart
  * @param {Object} props.formatters - Custom formatting functions for values
  * @returns {JSX.Element} - Line chart component with X/Y axes, grid, and tooltip
  */
 const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }) => {
+  const theme = useTheme();
+  const isTimeAxis = config.xAxis?.type === "time";
   const items = React.useMemo(
-    () => (Array.isArray(data) ? toTimeSeries(data) : toSeries(config, data)),
-    [config, data]
+    () =>
+      Array.isArray(data)
+        ? toTimeSeries(data, isTimeAxis ? config.xKey || "time" : undefined)
+        : toSeries(config, data, { keepNulls: config.connectNulls === false }),
+    [config, data, isTimeAxis]
   );
+  const enhanced = useLineChartEnhancements(config, items, "label", theme, "left");
   const height = config.height ?? DEFAULTS.DIMENSIONS.baseHeight;
-  const stroke = config.lineColor || brandColor;
+  // Only the new `colour` field resolves token names; existing colour props are used as given.
+  const stroke =
+    config.lineColor ||
+    resolveColourToken(config.series?.[0]?.colour, theme) ||
+    config.series?.[0]?.color ||
+    brandColor;
 
   const comparatorKey = config.comparatorKey || "dmValue";
   const comparatorLabel = config.comparatorLabel || "Comparator";
   const primaryLabel = config.primaryLabel || "Value";
-  const comparatorStroke = config.comparatorColor || chartUiColors?.comparator || "#767676";
+  const comparatorStroke =
+    config.comparatorColor ||
+    resolveColourToken(config.series?.[1]?.colour, theme) ||
+    config.series?.[1]?.color ||
+    chartUiColors?.comparator ||
+    "#767676";
 
   const [hiddenSeries, setHiddenSeries] = React.useState({});
   const toggleSeries = (e) => {
@@ -1114,25 +1394,30 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
 
   const chartMargin = React.useMemo(
     () => ({
-      top: 6,
-      right: hasComparator ? 6 : 8,
+      top: enhanced.topMargin ?? 6,
+      right: enhanced.rightMargin ?? (hasComparator ? 6 : 8),
       bottom: 2,
       left: 4,
     }),
-    [hasComparator]
+    [hasComparator, enhanced.topMargin, enhanced.rightMargin]
   );
 
   return (
     <ChartSection
-      ariaLabel={config.ariaLabel || "Line chart"}
+      ariaLabel={
+        config.ariaLabel || (enhanced.enabled && config.title) || "Line chart"
+      }
       title={config.title}
       height={height}
       xAxisTitle={config.x_axis_title}
       yAxisTitle={resolvedYAxisTitle}
       rightYAxisTitle={resolvedRightYAxisTitle}
+      description={enhanced.description}
+      descriptionId={enhanced.descriptionId}
     >
-      <RLineChart data={items} margin={chartMargin}>
+      <RLineChart data={enhanced.data} margin={chartMargin}>
         <RCartesianGrid {...DEFAULTS.GRID} />
+        {enhanced.overlays}
         <RXAxis
           dataKey="label"
           angle={DEFAULTS.DIMENSIONS.xAngle}
@@ -1140,6 +1425,7 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
           height={xAxisHeight}
           interval={Array.isArray(data) ? Math.max(0, Math.ceil(items.length / 8) - 1) : 0}
           tick={{ fontSize: DEFAULTS.DIMENSIONS.tickFontSize }}
+          {...enhanced.xAxisProps}
         />
         <RYAxis
           yAxisId="left"
@@ -1161,15 +1447,19 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
           />
         )}
         <RTooltip
-          content={<ChartTooltip config={config} />}
+          content={<ChartTooltip config={config} labelFormatter={enhanced.labelFormatter} />}
           cursor={{ stroke: chartUiColors.guideStroke, strokeDasharray: "3 3" }}
           wrapperStyle={{ zIndex: 9999, pointerEvents: "none" }}
         />
         {hasComparator && (
           <RLegend
-            verticalAlign="top"
+            verticalAlign={enhanced.legendAlign}
             align="center"
-            wrapperStyle={{ fontSize: DEFAULTS.DIMENSIONS.tickFontSize, paddingBottom: 10, cursor: "pointer" }}
+            wrapperStyle={{
+              fontSize: DEFAULTS.DIMENSIONS.tickFontSize,
+              cursor: "pointer",
+              ...(enhanced.legendAlign === "bottom" ? { paddingTop: 6 } : { paddingBottom: 10 }),
+            }}
             formatter={(value) => (
               <span
                 style={{
@@ -1194,6 +1484,7 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
           dot={false}
           activeDot={{ r: 4 }}
           legendType="line"
+          connectNulls={config.connectNulls ?? false}
           hide={hiddenSeries["value"]}
           strokeOpacity={hiddenSeries["value"] ? 0.3 : 1}
         />
@@ -1209,6 +1500,7 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
             dot={false}
             activeDot={{ r: 4 }}
             legendType="line"
+            connectNulls={config.connectNulls ?? false}
             hide={hiddenSeries[comparatorKey]}
             strokeOpacity={hiddenSeries[comparatorKey] ? 0.3 : 1}
           />
@@ -1224,10 +1516,18 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
  * @param {Object} props.config - Chart configuration object
  * @param {Object} props.data - Data object containing values to chart
  * @param {Object} props.formatters - Custom formatting functions for values
+ * @param {Array} [props.config.columns] - Series `{ key, label, color|colour }`; `series` is accepted as an alias
+ * @param {Object} [props.config.xAxis] - Optional `{ type: "time", format, tickInterval, domain, tooltipFormat, utc }`
+ * @param {boolean} [props.config.connectNulls] - Draw lines across null values (default: true)
+ * @param {Array} [props.config.bands] - Optional shaded ranges `{ from, to, label, tone }`
+ * @param {Array} [props.config.gaps] - Optional missing-data ranges `{ from, to, label }`
  * @returns {JSX.Element} - Multiple Line chart component with X/Y axes, grid, and tooltip
  */
 const MultipleLineChart = ({ config, data, formatters }) => {
+  const theme = useTheme();
   const items = React.useMemo(() => data, [data]);
+  const columns = config.columns || config.series || [];
+  const enhanced = useLineChartEnhancements(config, items, config.xKey || "label", theme);
   const height = config.height ?? DEFAULTS.DIMENSIONS.baseHeight;
   const [hiddenSeries, setHiddenSeries] = React.useState({});
 
@@ -1252,7 +1552,7 @@ const MultipleLineChart = ({ config, data, formatters }) => {
     [config, items]
   );
 
-  const visibleColumns = (config.columns || []).filter((c) => !hiddenSeries[c.key]);
+  const visibleColumns = columns.filter((c) => !hiddenSeries[c.key]);
   const hasNegative = items.some((i) => visibleColumns.some((c) => Number(i[c.key]) < 0));
   const hasPositive = items.some((i) => visibleColumns.some((c) => Number(i[c.key]) > 0));
   const hasOnlyZero = !hasNegative && !hasPositive && items.some((i) => visibleColumns.some((c) => Number(i[c.key]) === 0));
@@ -1270,7 +1570,7 @@ const MultipleLineChart = ({ config, data, formatters }) => {
   const maxTickLen = React.useMemo(() => {
     let max = 3;
     items.forEach((item) => {
-      (config.columns || []).forEach((col) => {
+      columns.forEach((col) => {
         const val = item[col.key];
         if (val !== null && val !== undefined && !isNaN(Number(val))) {
           const len = formatter(Math.abs(Number(val))).length;
@@ -1279,20 +1579,33 @@ const MultipleLineChart = ({ config, data, formatters }) => {
       });
     });
     return max;
-  }, [items, config.columns]);
+  }, [items, columns]);
 
   const yAxisWidth = Math.max(26, Math.min(52, maxTickLen * 6.2 + 6));
 
   return (
     <ChartSection
-      ariaLabel={config.ariaLabel || "Multiple Line chart"}
+      ariaLabel={
+        config.ariaLabel || (enhanced.enabled && config.title) || "Multiple Line chart"
+      }
       title={config.title}
       height={height}
       xAxisTitle={config.x_axis_title}
       yAxisTitle={formatAxisTitleWithUnit(config.y_axis_title, config.units)}
+      description={enhanced.description}
+      descriptionId={enhanced.descriptionId}
     >
-      <RLineChart data={items} margin={{ top: 6, right: 8, bottom: 2, left: 4 }}>
+      <RLineChart
+        data={enhanced.data}
+        margin={{
+          top: enhanced.topMargin ?? 6,
+          right: enhanced.rightMargin ?? 8,
+          bottom: 2,
+          left: 4,
+        }}
+      >
         <RCartesianGrid {...DEFAULTS.GRID} />
+        {enhanced.overlays}
         <RXAxis
           dataKey={config.xKey || "label"}
           angle={DEFAULTS.DIMENSIONS.xAngle}
@@ -1300,6 +1613,7 @@ const MultipleLineChart = ({ config, data, formatters }) => {
           height={xAxisHeight}
           interval={Math.max(0, Math.ceil(items.length / 8) - 1)}
           tick={{ fontSize: DEFAULTS.DIMENSIONS.tickFontSize }}
+          {...enhanced.xAxisProps}
         />
         <RYAxis
           allowDecimals={true}
@@ -1310,14 +1624,18 @@ const MultipleLineChart = ({ config, data, formatters }) => {
           tickMargin={4}
         />
         <RTooltip
-          content={<ChartTooltip config={config} />}
+          content={<ChartTooltip config={config} labelFormatter={enhanced.labelFormatter} />}
           cursor={{ stroke: "#ccc", strokeDasharray: "3 3" }}
           wrapperStyle={{ zIndex: 9999, pointerEvents: "none" }}
         />
         <RLegend
-          verticalAlign="top"
+          verticalAlign={enhanced.legendAlign}
           align="center"
-          wrapperStyle={{ fontSize: DEFAULTS.DIMENSIONS.tickFontSize, paddingBottom: 10, cursor: "pointer" }}
+          wrapperStyle={{
+            fontSize: DEFAULTS.DIMENSIONS.tickFontSize,
+            cursor: "pointer",
+            ...(enhanced.legendAlign === "bottom" ? { paddingTop: 6 } : { paddingBottom: 10 }),
+          }}
           formatter={(value) => (
             <span
               style={{
@@ -1331,17 +1649,22 @@ const MultipleLineChart = ({ config, data, formatters }) => {
           )}
           onClick={toggleSeries}
         />
-        {(config.columns || []).map((col, idx) => (
+        {columns.map((col, idx) => (
           <RLine
             key={col.key}
             type="monotone"
             dataKey={col.key}
             name={col.label}
-            stroke={(config.colors && config.colors[col.key]) || col.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]}
+            stroke={
+              (config.colors && config.colors[col.key]) ||
+              resolveColourToken(col.colour, theme) ||
+              col.color ||
+              DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
+            }
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
-            connectNulls={true}
+            connectNulls={config.connectNulls ?? true}
             hide={hiddenSeries[col.key]}
             strokeOpacity={hiddenSeries[col.key] ? 0.3 : 1}
           />

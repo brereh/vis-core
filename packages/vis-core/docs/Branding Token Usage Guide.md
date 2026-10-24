@@ -39,8 +39,10 @@ Use from `theme.colors.*`, `theme.*`, or CSS vars:
 - Border fallback (static/legacy CSS): `var(--palette-grey)`
 - Nav border (override-friendly): `theme.colors.navBorder`
 - Nav border fallback (static/legacy CSS): `var(--palette-bottom-grey)`
-- Warning tone (override-friendly): `theme.colors.warning`
-- Danger/error tone (override-friendly): `theme.colors.danger`
+- Warning (override-friendly): `theme.colors.warning` (used by chart gaps and warning bands)
+- Warning fallback: `brandTokens.palette.warning`
+- Danger/error tone (override-friendly): `theme.colors.danger` (used by heatmap missing cells and error markers)
+- Danger fallback: `brandTokens.palette.danger`
 
 ### Typography
 - Base copy: `theme.standardFontFamily` / `var(--font-family-base)`
