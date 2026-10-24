@@ -2,6 +2,8 @@
 
 A download button for one feature's data, for example a site's CSV from its callout card or detail page. It downloads with the current filters, carries the user's Bearer token, and is hidden from users whose role cannot download.
 
+> **Set `requiredRoles` to hide the button from roles without download rights.** Without it, every user sees the button, and only the API's `403` stops a download. The button hides only from users who hold none of the listed roles, so apps whose datasets restrict downloads must set it.
+
 ## Callout card config
 
 Add `download` to a `calloutCard` visualisation:
@@ -25,7 +27,7 @@ Add `download` to a `calloutCard` visualisation:
 
 | Option | Behaviour |
 | --- | --- |
-| `path` | API path. Each `{name}` placeholder is filled, URL-encoded, from the selected feature: the card's path params (such as `id`), then the card data (including `mainValues`), then the card's query params. If a placeholder has no value, the button is disabled and its tooltip names the missing value. |
+| `path` | API path. Each `{name}` placeholder is filled, URL-encoded, from the selected feature: the card's path params (such as `id`), then the card data (including `mainValues`), then the card's query params. If a placeholder has no value, the button is marked `aria-disabled` and does nothing when pressed. It stays focusable, and a tooltip plus a screen-reader description name the missing value. |
 | `includeFilters` | Appends the card's current query params (the filter values the card was fetched with) to the request. Empty values are dropped. For `POST`, the params go in the JSON body. |
 | `label` | Button text. |
 | `requiredRoles` | Roles allowed to download. `{app}` is replaced by the lower-cased app name (`VITE_APP_NAME`). Matching is case-insensitive and reads the roles claim from the signed-in user's token. The button is hidden when the user holds none of them, including when signed out. Leave it out to show the button to everyone. Cross-app roles such as `all_admin` are not implied; list them if they should download. |

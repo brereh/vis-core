@@ -315,12 +315,6 @@ const TogglePing = styled.span`
   pointer-events: none;
 `;
 
-/**
- * Serialises a value for comparison without throwing on unusual inputs.
- *
- * @param {any} value - Value to serialise.
- * @returns {string} JSON output when possible, otherwise `String(value)`.
- */
 const CardActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -341,6 +335,12 @@ const toPlainParams = (paramsMap = {}) =>
       .map(([key, param]) => [key, param.value])
   );
 
+/**
+ * Serialises a value for comparison without throwing on unusual inputs.
+ *
+ * @param {any} value - Value to serialise.
+ * @returns {string} JSON output when possible, otherwise `String(value)`.
+ */
 const safeStringify = (value) => {
   try {
     return JSON.stringify(value);

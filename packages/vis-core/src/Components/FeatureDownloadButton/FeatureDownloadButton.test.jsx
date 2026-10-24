@@ -143,11 +143,21 @@ describe("FeatureDownloadButton", () => {
     );
   });
 
-  it("is disabled when a placeholder has no value", () => {
+  it("stays focusable and explains why when a placeholder has no value", async () => {
     renderButton({ values: {} });
     const button = screen.getByRole("button", { name: "Site CSV" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", "Missing id for this download");
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription("Missing id for this download");
+
+    await userEvent.tab();
+    expect(button).toHaveFocus();
+    await userEvent.click(button);
+    expect(api.downloadService.downloadFile).not.toHaveBeenCalled();
+  });
+
+  it("has no accessibility violations when a placeholder has no value", async () => {
+    const { container } = renderButton({ values: {} });
+    expect(await axe(container)).toHaveNoViolations();
   });
 
   it("has no automated accessibility violations", async () => {

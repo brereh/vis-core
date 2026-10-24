@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
 
 import { api } from "services";
@@ -40,7 +40,7 @@ const Button = styled.button`
   font-size: 0.9rem;
   font-weight: 600;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not([aria-disabled="true"]) {
     background: ${({ theme }) => theme?.colors?.muted ?? "var(--palette-mid-grey)"};
   }
 
@@ -50,10 +50,23 @@ const Button = styled.button`
     outline-offset: 2px;
   }
 
-  &:disabled {
+  &:disabled,
+  &[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.7;
   }
+`;
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;
 
 const Spinner = styled.span`
@@ -136,10 +149,8 @@ export const FeatureDownloadButton = ({
     () => expandRoleTemplates(requiredRoles, appName),
     [requiredRoles, appName]
   );
-  const { path, missing } = useMemo(
-    () => fillPathTemplate(pathTemplate, values),
-    [pathTemplate, values]
-  );
+  const descriptionId = useId();
+  const { path, missing } = fillPathTemplate(pathTemplate, values);
 
   if (!pathTemplate || !userHasAnyRole(roles)) return null;
 
@@ -147,6 +158,7 @@ export const FeatureDownloadButton = ({
   const isUnavailable = missing.length > 0;
 
   const handleDownload = async () => {
+    if (isUnavailable || isDownloading) return;
     setIsDownloading(true);
     removeToast(toastId);
     try {
@@ -173,22 +185,35 @@ export const FeatureDownloadButton = ({
     }
   };
 
+  // A missing placeholder uses aria-disabled rather than disabled, so the button stays
+  // focusable and screen readers announce why it cannot be used.
+  const unavailableReason = isUnavailable
+    ? `Missing ${missing.join(", ")} for this download`
+    : null;
+
   return (
-    <Button
-      type="button"
-      onClick={handleDownload}
-      disabled={isDownloading || isUnavailable}
-      aria-busy={isDownloading}
-      title={isUnavailable ? `Missing ${missing.join(", ")} for this download` : undefined}
-      $color={color}
-    >
-      {isDownloading ? (
-        <>
-          Downloading… <Spinner aria-hidden="true" />
-        </>
-      ) : (
-        label
+    <>
+      <Button
+        type="button"
+        onClick={handleDownload}
+        disabled={isDownloading}
+        aria-disabled={isUnavailable || undefined}
+        aria-busy={isDownloading}
+        aria-describedby={isUnavailable ? descriptionId : undefined}
+        title={unavailableReason || undefined}
+        $color={color}
+      >
+        {isDownloading ? (
+          <>
+            Downloading… <Spinner aria-hidden="true" />
+          </>
+        ) : (
+          label
+        )}
+      </Button>
+      {isUnavailable && (
+        <VisuallyHidden id={descriptionId}>{unavailableReason}</VisuallyHidden>
       )}
-    </Button>
+    </>
   );
 };
