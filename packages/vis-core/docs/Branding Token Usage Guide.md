@@ -39,6 +39,8 @@ Use from `theme.colors.*`, `theme.*`, or CSS vars:
 - Border fallback (static/legacy CSS): `var(--palette-grey)`
 - Nav border (override-friendly): `theme.colors.navBorder`
 - Nav border fallback (static/legacy CSS): `var(--palette-bottom-grey)`
+- Warning (override-friendly): `theme.colors.warning` (used by chart gaps and warning bands)
+- Warning fallback: `brandTokens.palette.warning`
 
 ### Typography
 - Base copy: `theme.standardFontFamily` / `var(--font-family-base)`
