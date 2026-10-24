@@ -130,5 +130,9 @@ export const REQUEST_CONFIG = {
   }
 };
 
+// Default endpoint used to resolve `values.source: 'api'` filter options (TAME's metadata view).
+// Apps can override it with `downloadMetadataPath` in page or app config.
+export const DEFAULT_DOWNLOAD_METADATA_PATH = "/api/tame/mvdata";
+
 // Default opacity used for map layers when not explicitly provided via config
 export const DEFAULT_LAYER_OPACITY = 0.65;

@@ -14,6 +14,7 @@ import {
   getInitialFilterValue,
 } from "utils";
 import { defaultMapZoom, defaultMapCentre, defaultMapStyle } from "defaults";
+import { getDownloadMetadataPath } from "utils/downloads";
 import { AppContext } from "./AppContext";
 import { PageContext } from "./PageContext";
 import { ErrorContext } from "./ErrorContext";
@@ -297,7 +298,7 @@ export const MapProvider = ({ children }) => {
       const apiSourceFilters = filtersWithIds.filter((f) => f.values?.source === 'api');
       if (apiSourceFilters.length > 0) {
         try {
-          const path = '/api/tame/mvdata';
+          const path = getDownloadMetadataPath(pageContext.config, appContext);
           const dataPath = { dataPath: pageContext.config.visualisations[0].dataPath };
           const metadataFilters = await api.baseService.post(path, dataPath, { skipAuth: false });
           if (cancelled) return;

@@ -383,3 +383,53 @@ describe("Tests formatNumberWithUnit in callout card", () => {
     expect(screen.getByText("123.46K sqm")).toBeInTheDocument();
   });
 });
+
+describe("Per-feature download", () => {
+  const { api } = jest.requireActual("services");
+
+  it("renders the configured download button with the feature id and current filters", async () => {
+    const downloadSpy = jest
+      .spyOn(api.downloadService, "downloadFile")
+      .mockResolvedValue({ filename: "site-72.csv" });
+    const context = {
+      ...mockMapContext,
+      state: {
+        ...mockMapContext.state,
+        visualisations: {
+          test: {
+            ...mockMapContext.state.visualisations.test,
+            pathParams: { id: { value: 72 } },
+            queryParams: { day_type: { value: "neutral" }, vehicle_class: { value: null } },
+            download: { path: "/api/download/counts/atc/sites/{id}", label: "Site CSV" },
+          },
+        },
+      },
+    };
+
+    render(
+      <ThemeProvider theme={theme}>
+        <MapContext.Provider value={context}>
+          <CalloutCardVisualisation {...props} />
+        </MapContext.Provider>
+      </ThemeProvider>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Site CSV" }));
+    expect(downloadSpy).toHaveBeenCalledWith("/api/download/counts/atc/sites/72", {
+      queryParams: { day_type: "neutral" },
+      skipAuth: false,
+      method: "GET",
+    });
+  });
+
+  it("renders no download button without config", () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <MapContext.Provider value={mockMapContext}>
+          <CalloutCardVisualisation {...props} />
+        </MapContext.Provider>
+      </ThemeProvider>
+    );
+    expect(screen.queryByRole("button", { name: /csv/i })).not.toBeInTheDocument();
+  });
+});
