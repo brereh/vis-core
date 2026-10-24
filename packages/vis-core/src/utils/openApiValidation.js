@@ -1,5 +1,6 @@
 import { extractParamsWithValuesSeparated, getGetParameters } from "./apiParams";
 import { buildParamsMap } from "./config";
+import { getFilterParamNames } from "./filterParams";
 
 const DEFAULT_EXCLUDED_PARAMS = ["x", "y", "z"]; // tile placeholders
 
@@ -7,8 +8,8 @@ const normaliseFiltersToParamNameSet = (filters = []) => {
   const set = new Set();
   if (!Array.isArray(filters)) return set;
   for (const filter of filters) {
-    const paramName = filter?.paramName;
-    if (typeof paramName === "string" && paramName.trim()) set.add(paramName);
+    // Multi-parameter filters (e.g. date ranges) cover every parameter they set.
+    getFilterParamNames(filter).forEach((paramName) => set.add(paramName));
   }
   return set;
 };

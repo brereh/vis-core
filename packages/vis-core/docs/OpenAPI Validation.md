@@ -40,6 +40,7 @@ For each endpoint, it checks the OpenAPI schema for that route and ensures every
 A required OpenAPI parameter is considered satisfied if **any** of the following are true:
 
 - A page filter exists with `filter.paramName === <parameter name>`
+- A multi-parameter filter sets it: each entry of an array `paramName`, and `extraToggle.paramName`, counts (see [Date Range Selector](Date%20Range%20Selector.md))
 - The OpenAPI parameter has a default in the schema (e.g. `schema.default`)
 - The parameter is hard-coded in the configured URL (e.g. `/api/foo?dataset_id=123`)
 - The parameter is excluded by design (tile placeholders `x`, `y`, `z` are excluded by default)
