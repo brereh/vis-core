@@ -15,6 +15,7 @@ import {
   resolveBoundaryPaint,
 } from "../../map/applicationLayerTheme";
 import { useMapContext } from "hooks/useMapContext";
+import { expandFilterParamValues, isMultiParamFilter } from "utils/filterParams";
 import { FilterContext } from "contexts/FilterContext";
 import { actionTypes } from "reducers/mapReducer";
 import { DEFAULT_LAYER_OPACITY } from "defaults";
@@ -571,7 +572,12 @@ export const Layer = ({ layer }) => {
       if (Object.keys(filters).length > 0) {
         requestUrl = url.replace(/\{(\w+)\}/g, (_, key) => {
           const uuid = paramNameToUuidMap?.[key];
-          return uuid && filters[uuid] !== undefined ? filters[uuid] : `{${key}}`;
+          if (!uuid || filters[uuid] === undefined) return `{${key}}`;
+          // A multi-parameter filter (e.g. a date range) fills each placeholder with its own value.
+          const sourceFilter = state.filters?.find((f) => f.id === uuid);
+          if (!isMultiParamFilter(sourceFilter)) return filters[uuid];
+          const paramValue = expandFilterParamValues(sourceFilter, filters[uuid])[key];
+          return paramValue !== undefined ? paramValue : `{${key}}`;
         });
         dispatch({
           type: actionTypes.UPDATE_LAYER_TOOLTIP_URL,
@@ -580,7 +586,7 @@ export const Layer = ({ layer }) => {
       }
     }
 
-  }, [filters, paramNameToUuidMap, map, maps, dispatch]);
+  }, [filters, paramNameToUuidMap, state.filters, map, maps, dispatch]);
   
   // This component does not render any visible elements
   return null;

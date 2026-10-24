@@ -339,3 +339,44 @@ describe("mapReducer UPDATE_PARAMETERISED_LAYER with separateSidePaths", () => {
     expect(layer.path).toContain("year=2040");
   });
 });
+describe("mapReducer with a multi-parameter dateRange filter", () => {
+  const filter = {
+    type: "dateRange",
+    paramName: ["date_from", "date_to"],
+    extraToggle: { paramName: "include_excluded", label: "Include excluded days" },
+    visualisations: ["Counts"],
+  };
+  const value = ["2025-10-06", "2025-10-19", true];
+
+  it("updates both date query params and the toggle param", () => {
+    const state = mapReducer(
+      { visualisations: { Counts: { queryParams: { date_from: { value: null, required: true } } } } },
+      { type: actionTypes.UPDATE_QUERY_PARAMS, payload: { filter, value } }
+    );
+
+    expect(state.visualisations.Counts.queryParams).toEqual({
+      date_from: { value: "2025-10-06", required: true },
+      date_to: { value: "2025-10-19", required: false },
+      include_excluded: { value: true, required: false },
+    });
+  });
+
+  it("updates every param of a parameterised layer and clears them from missingParams", () => {
+    const template = "/api/vectortiles/sites/{z}/{x}/{y}?date_from={date_from}&date_to={date_to}&include_excluded={include_excluded}";
+    const state = mapReducer(
+      {
+        layers: {
+          sites: {
+            pathTemplate: template,
+            path: template,
+            missingParams: ["date_from", "date_to", "include_excluded"],
+          },
+        },
+      },
+      { type: actionTypes.UPDATE_PARAMETERISED_LAYER, payload: { targetLayer: "sites", filter, value } }
+    );
+
+    expect(state.layers.sites.path).toContain("date_from=2025-10-06&date_to=2025-10-19&include_excluded=true");
+    expect(state.layers.sites.missingParams).toEqual([]);
+  });
+});

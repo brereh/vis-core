@@ -109,3 +109,38 @@ describe("validateAppConfigAgainstOpenApi", () => {
     expect(result.warnings[0]).toMatchObject({ type: "missing_schema_path" });
   });
 });
+
+describe("validateAppConfigAgainstOpenApi with multi-parameter filters", () => {
+  it("treats every paramName of a dateRange filter, and its extra toggle, as covered", () => {
+    const apiSchema = makeSchema({
+      "/api/counts": {
+        get: {
+          parameters: [
+            { in: "query", name: "date_from", required: true },
+            { in: "query", name: "date_to", required: true },
+            { in: "query", name: "include_excluded", required: true },
+          ],
+        },
+      },
+    });
+    const appConfig = {
+      appPages: [
+        {
+          pageName: "Counts",
+          config: {
+            filters: [
+              {
+                type: "dateRange",
+                paramName: ["date_from", "date_to"],
+                extraToggle: { paramName: "include_excluded", label: "Include excluded days" },
+              },
+            ],
+            visualisations: [{ name: "V", dataPath: "/api/counts" }],
+          },
+        },
+      ],
+    };
+
+    expect(validateAppConfigAgainstOpenApi(appConfig, apiSchema).errors).toEqual([]);
+  });
+});

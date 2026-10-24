@@ -43,3 +43,7 @@ When defining a filter that uses a metadata table, the `values` object within th
 1. **Original Table Order**: If `sort` is **omitted**, the dropdown will populate in the exact order the rows appear in the metadata table (deduplicated).
 2. **Alphabetical/Numeric Sort**: If `sort` is set to `"ascending"` or `"descending"` and `sortColumn` is **omitted**, the options will be sorted alphabetically/numerically by their `displayColumn` text.
 3. **Custom Column Sort**: If both `sort` and `sortColumn` are provided, the options will be sorted based on the numeric or text values in the `sortColumn`.
+
+## Date range bounds
+
+A `dateRange` filter reads its `min` and `max` from a metadata table instead of building options. Set `column` (or `minColumn` and `maxColumn`) in its `values` block; `where` is applied first. See [Date Range Selector](Date%20Range%20Selector.md).

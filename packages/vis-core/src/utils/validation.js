@@ -9,9 +9,10 @@
  * @returns {Array} Updated filters array with `isValid` and/or `isHidden` applied.
  */
 export function updateFilterValidity(state, filterState) {
-  const activeFilters = state.filters.filter(
-    (filter) => filter.values && filter.values.metadataTableName
-  );
+  // Filters without an options list (such as metadata-driven date ranges) have nothing to validate.
+  const hasMetadataOptions = (filter) =>
+    filter.values && filter.values.metadataTableName && Array.isArray(filter.values.values);
+  const activeFilters = state.filters.filter(hasMetadataOptions);
 
   // Build full valid set for each filter from its metadata table
   const validValuesMap = {};
@@ -84,7 +85,7 @@ export function updateFilterValidity(state, filterState) {
 
   // Apply isValid/isHidden per filter according to flags
   const updatedFilters = state.filters.map((filter) => {
-    if (!(filter.values && filter.values.metadataTableName)) return filter;
+    if (!hasMetadataOptions(filter)) return filter;
 
     const validSet = validValuesMap[filter.id];
     if (!validSet) return filter;

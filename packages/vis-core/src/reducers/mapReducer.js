@@ -1,5 +1,6 @@
 import { updateUrlParameters, normaliseParamValue, normaliseDisplayMode } from "utils";
 import { getBaseMap } from "../map/baseMaps";
+import { expandFilterParamValues } from "utils/filterParams";
 
 /**
  * Finds the first configured colour scheme value from filter options.
@@ -56,6 +57,37 @@ function updateParamMap(visualisationsMap, visualisationNames, fieldName, paramN
 
   return updatedVisualisations;
 }
+
+/**
+ * Resolves the parameters a filter action updates.
+ *
+ * An explicit `payload.paramName` wins. Otherwise the filter's value is expanded, so a
+ * multi-parameter filter (array `paramName` and/or `extraToggle`) updates each parameter.
+ *
+ * @param {Object} payload - The action payload ({ filter, value, paramName? }).
+ * @returns {Object<string, any>} Parameter name to raw value.
+ */
+const getParamUpdates = (payload) => {
+  if (payload.paramName) return { [payload.paramName]: payload.value };
+  return expandFilterParamValues(payload.filter, payload.value);
+};
+
+/**
+ * Applies `updateParamMap` for each parameter in `paramUpdates`.
+ *
+ * @param {Object} visualisationsMap - The visualisations state slice.
+ * @param {string[]} visualisationNames - Names of visualisations to update.
+ * @param {string} fieldName - "queryParams" or "pathParams".
+ * @param {Object<string, any>} paramUpdates - Parameter name to raw value.
+ * @param {"comma"|"slash"} joinStyle - How array values are joined.
+ * @returns {Object} The updated visualisations map.
+ */
+const updateParamMaps = (visualisationsMap, visualisationNames, fieldName, paramUpdates, joinStyle) =>
+  Object.entries(paramUpdates).reduce(
+    (visMap, [paramName, value]) =>
+      updateParamMap(visMap, visualisationNames, fieldName, paramName, normaliseParamValue(value, joinStyle)),
+    visualisationsMap
+  );
 
 /**
  * Resolves legend text from a rule set based on the selected filter option.
@@ -326,7 +358,6 @@ export const mapReducer = (state, action) => {
     case actionTypes.UPDATE_PARAMETERISED_LAYER: {
       // Get the layer name and new parameters from the payload
       const layerName = action.payload.targetLayer;
-      const paramName = action.payload.filter.paramName;
       const newParamValue = action.payload.value;
 
       if (newParamValue == null) {
@@ -334,8 +365,9 @@ export const mapReducer = (state, action) => {
         return state; // Return the current state unmodified
       }
 
-      // Prepare the parameters object for replacement
-      const params = { [paramName]: newParamValue };
+      // Prepare the parameters object for replacement (one entry per parameter the filter sets)
+      const params = expandFilterParamValues(action.payload.filter, newParamValue);
+      const paramNames = Object.keys(params);
 
       // Opt-in for dual maps: a layer with separateSidePaths keeps a separate path per side,
       // so a "Left"/"Right" filter only changes the tiles on its own map. Any other filter
@@ -355,7 +387,7 @@ export const mapReducer = (state, action) => {
         targetSides.forEach((target) => {
           sidePaths[target] = updateUrlParameters(layer.pathTemplate, sidePaths[target], params);
           sideMissingParams[target] = sideMissingParams[target].filter(
-            (param) => param !== paramName
+            (param) => !paramNames.includes(param)
           );
         });
         return {
@@ -386,7 +418,7 @@ export const mapReducer = (state, action) => {
       // Update the missingParams array if it exists
       const currentMissingParams = state.layers[layerName].missingParams || [];
       const updatedMissingParams = currentMissingParams.filter(
-        (param) => param !== paramName
+        (param) => !paramNames.includes(param)
       );
 
       // Update the layer in the state
@@ -517,16 +549,14 @@ export const mapReducer = (state, action) => {
 
     case actionTypes.UPDATE_PATH_PARAMS: {
       const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
       const joinStyle = action.payload.joinStyle || action.payload.filter?.joinStyle || "slash";
-      const newParamValue = normaliseParamValue(action.payload.value, joinStyle);
 
-      const updatedVisualisations = updateParamMap(
+      const updatedVisualisations = updateParamMaps(
         state.visualisations,
         visualisationNames,
         "pathParams",
-        paramName,
-        newParamValue
+        getParamUpdates(action.payload),
+        joinStyle
       );
 
       return {
@@ -537,9 +567,8 @@ export const mapReducer = (state, action) => {
 
     case actionTypes.UPDATE_DUAL_PATH_PARAMS: {
       const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
       const joinStyle = action.payload.joinStyle || action.payload.filter?.joinStyle || "slash";
-      const newParamValue = normaliseParamValue(action.payload.value, joinStyle);
+      const paramUpdates = getParamUpdates(action.payload);
 
       // Prepare the target(s) based on sides
       const targets = (() => {
@@ -557,7 +586,7 @@ export const mapReducer = (state, action) => {
 
       // Apply updates to each target pane
       const updatedTargets = targets.map((visMap) =>
-        updateParamMap(visMap, visualisationNames, "pathParams", paramName, newParamValue)
+        updateParamMaps(visMap, visualisationNames, "pathParams", paramUpdates, joinStyle)
       );
 
       // Return updated state matching requested sides
@@ -579,17 +608,14 @@ export const mapReducer = (state, action) => {
 
     case actionTypes.UPDATE_QUERY_PARAMS: {
       const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
 
       // For query params, use comma-delimited arrays by default
-      const newParamValue = normaliseParamValue(action.payload.value, "comma");
-
-      const updatedVisualisations = updateParamMap(
+      const updatedVisualisations = updateParamMaps(
         state.visualisations,
         visualisationNames,
         "queryParams",
-        paramName,
-        newParamValue
+        getParamUpdates(action.payload),
+        "comma"
       );
 
       return {
@@ -600,10 +626,9 @@ export const mapReducer = (state, action) => {
 
     case actionTypes.UPDATE_DUAL_QUERY_PARAMS: {
       const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
 
       // For query params, use comma-delimited arrays by default
-      const newParamValue = normaliseParamValue(action.payload.value, "comma");
+      const paramUpdates = getParamUpdates(action.payload);
 
       // Prepare the target(s) based on sides
       const targets = (() => {
@@ -621,7 +646,7 @@ export const mapReducer = (state, action) => {
 
       // Apply updates to each target pane
       const updatedTargets = targets.map((visMap) =>
-        updateParamMap(visMap, visualisationNames, "queryParams", paramName, newParamValue)
+        updateParamMaps(visMap, visualisationNames, "queryParams", paramUpdates, "comma")
       );
 
       // Return updated state matching requested sides
