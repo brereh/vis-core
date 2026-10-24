@@ -25,6 +25,7 @@ import { TransitionGroup, CSSTransition } from "react-transition-group";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { CARD_CONSTANTS, defaultBgColour, brandTokens } from "defaults";
 import { formatNumber, formatValueWithUnit } from "utils";
+import { HeatmapChart } from "./HeatmapChart";
 const { CARD_WIDTH, PADDING, TOGGLE_BUTTON_WIDTH, TOGGLE_BUTTON_HEIGHT } =
   CARD_CONSTANTS;
 
@@ -1781,6 +1782,7 @@ const RankingChart = ({ config, data, formatters, chartUiColors, onRowClick }) =
  * - Scatter charts
  * - Pie/Donut charts
  * - Table charts
+ * - Heatmaps (rows by columns, see docs/Heatmap Chart.md)
  * - Histogram (placeholder - not implemented)
  *
  * @param {Object} props - Component props
@@ -1951,6 +1953,15 @@ export const ChartRenderer = ({
                 formatters={f}
                 chartUiColors={chartUiColors}
                 onRowClick={onRowClick}
+              />
+            );
+          case "heatmap":
+            return (
+              <HeatmapChart
+                key={idx}
+                config={cfg}
+                data={data}
+                formatters={f}
               />
             );
           case "histogram":
