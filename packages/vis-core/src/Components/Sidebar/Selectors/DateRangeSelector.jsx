@@ -2,7 +2,6 @@ import React, { useEffect, useId, useState } from "react";
 import styled from "styled-components";
 import { brandTokens } from "defaults";
 import {
-  clampIsoDate,
   formatDateForLocale,
   getDefaultDateRangeValue,
   normaliseDateRangeValue,
@@ -92,8 +91,10 @@ const ToggleLabel = styled.label`
  * for the filter's `extraToggle`.
  *
  * The filter value is `[from, to]`, or `[from, to, toggle]` with an `extraToggle`. Dates are
- * ISO `YYYY-MM-DD` strings and are clamped to `filter.min`/`filter.max`. A range with `from`
- * after `to` (or a missing date) is not sent; an inline error is announced instead.
+ * ISO `YYYY-MM-DD` strings. A value is only sent once both dates are complete, within
+ * `filter.min`/`filter.max` and in order. A reversed range is reported at once; an incomplete
+ * or out-of-range date is reported on blur, so typing is not interrupted. Inputs are never
+ * rewritten while someone types.
  *
  * @property {Object} filter - The dateRange filter configuration (with resolved `min`/`max`).
  * @property {string} [filter.locale] - BCP 47 locale used for dates in the hint and error text.
@@ -134,33 +135,58 @@ export const DateRangeSelector = ({ filter, value, onChange, disabled = false })
   const toLabel = filter.labels?.to ?? "To";
   const format = (iso) => formatDateForLocale(iso, locale);
 
+  /**
+   * Checks a pair of draft dates. Drafts are never rewritten: while someone types, Chromium
+   * reports partial years (`0002-…`) or `""`, and rewriting them would lose the typed date.
+   * @returns {{ status: "ok"|"incomplete"|"outOfRange"|"reversed", message?: string }}
+   */
+  const checkDrafts = (rawFrom, rawTo) => {
+    const from = toIsoDate(rawFrom);
+    const to = toIsoDate(rawTo);
+    if (!from || !to) {
+      return { status: "incomplete", message: `Enter a valid "${from ? toLabel : fromLabel}" date.` };
+    }
+    const outside = [from, to].some((date) => (min && date < min) || (max && date > max));
+    if (outside) {
+      const range = min && max
+        ? `between ${format(min)} and ${format(max)}`
+        : min ? `on or after ${format(min)}` : `on or before ${format(max)}`;
+      return { status: "outOfRange", message: `Choose a date ${range}.` };
+    }
+    if (from > to) {
+      return {
+        status: "reversed",
+        message: `"${fromLabel}" date (${format(from)}) must be on or before "${toLabel}" date (${format(to)}).`,
+      };
+    }
+    return { status: "ok", from, to };
+  };
+
   const handleDateChange = (which, rawValue) => {
     if (disabled) return;
-    const nextRaw = { from: draftFrom, to: draftTo, [which]: rawValue };
+    const nextFrom = which === "from" ? rawValue : draftFrom;
+    const nextTo = which === "to" ? rawValue : draftTo;
     if (which === "from") setDraftFrom(rawValue);
     else setDraftTo(rawValue);
 
-    const isoFrom = toIsoDate(nextRaw.from);
-    const isoTo = toIsoDate(nextRaw.to);
-    if (!isoFrom || !isoTo) {
-      setError(`Enter a valid "${isoFrom ? toLabel : fromLabel}" date.`);
-      return;
+    const result = checkDrafts(nextFrom, nextTo);
+    if (result.status === "ok") {
+      setError(null);
+      const next = [result.from, result.to];
+      if (filter.extraToggle) next.push(toggleChecked);
+      onChange(filter, next);
+    } else if (result.status === "reversed") {
+      // A complete but reversed range is reported straight away.
+      setError(result.message);
+    } else {
+      // Incomplete or out-of-range dates are often mid-typing: report them on blur instead.
+      setError(null);
     }
+  };
 
-    const from = clampIsoDate(isoFrom, min, max);
-    const to = clampIsoDate(isoTo, min, max);
-    if (from !== nextRaw.from) setDraftFrom(from);
-    if (to !== nextRaw.to) setDraftTo(to);
-
-    if (from > to) {
-      setError(`"${fromLabel}" date (${format(from)}) must be on or before "${toLabel}" date (${format(to)}).`);
-      return;
-    }
-
-    setError(null);
-    const next = [from, to];
-    if (filter.extraToggle) next.push(toggleChecked);
-    onChange(filter, next);
+  const handleBlur = () => {
+    const result = checkDrafts(draftFrom, draftTo);
+    if (result.status !== "ok") setError(result.message);
   };
 
   const handleToggleChange = (event) => {
@@ -177,7 +203,6 @@ export const DateRangeSelector = ({ filter, value, onChange, disabled = false })
       role="group"
       aria-label={filter.filterName}
       lang={locale}
-      style={{ opacity: disabled ? 0.45 : 1, pointerEvents: disabled ? "none" : "auto" }}
     >
       <Field>
         <FieldLabel htmlFor={fromId}>{fromLabel}</FieldLabel>
@@ -191,6 +216,7 @@ export const DateRangeSelector = ({ filter, value, onChange, disabled = false })
           aria-invalid={error ? "true" : "false"}
           aria-describedby={describedBy}
           onChange={(event) => handleDateChange("from", event.target.value)}
+          onBlur={handleBlur}
         />
       </Field>
       <Field>
@@ -205,6 +231,7 @@ export const DateRangeSelector = ({ filter, value, onChange, disabled = false })
           aria-invalid={error ? "true" : "false"}
           aria-describedby={describedBy}
           onChange={(event) => handleDateChange("to", event.target.value)}
+          onBlur={handleBlur}
         />
       </Field>
       {min && max && (

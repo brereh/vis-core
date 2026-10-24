@@ -503,6 +503,30 @@ describe("SelectorSection component test", () => {
       expect(screen.getByRole("checkbox")).toBeDisabled();
     });
 
+    it("can be the target of another filter's disabledWhen", () => {
+      const dependent = {
+        type: "dateRange",
+        id: "dependentId",
+        filterName: "Comparison dates",
+        paramName: ["cmp_from", "cmp_to"],
+        labels: { from: "Comparison from", to: "Comparison to" },
+        disabledWhen: { paramName: "date_to", operator: "equals", value: "2025-10-08" },
+      };
+      render(
+        <AppContext.Provider value={mockAppContexte}>
+          <MapContext.Provider value={{ state: mockState, dispatch }}>
+            <FilterContext.Provider
+              value={{ ...mockFilterContext, state: { surveyDatesId: ["2025-10-07", "2025-10-08", true] } }}
+            >
+              <SelectorSection {...props} filters={[{ ...dateRangeFilter, disabledWhen: undefined }, dependent]} />
+            </FilterContext.Provider>
+          </MapContext.Provider>
+        </AppContext.Provider>
+      );
+      expect(screen.getByLabelText("Comparison from")).toBeDisabled();
+      expect(screen.getByLabelText("From")).not.toBeDisabled();
+    });
+
     it("sends every date range parameter with a download", async () => {
       const downloadFile = jest.spyOn(api.downloadService, "downloadFile").mockResolvedValue();
       window.clarity = jest.fn();

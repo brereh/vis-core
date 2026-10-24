@@ -72,21 +72,50 @@ describe("DateRangeSelector", () => {
     expect(from).toHaveAttribute("aria-invalid", "false");
   });
 
-  it("blocks an empty date", () => {
+  it("reports an empty date on blur, not while typing", () => {
     const { onChange } = renderSelector({ value: ["2025-10-06", "2025-10-10"] });
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "" } });
+    const to = screen.getByLabelText("To");
+    fireEvent.change(to, { target: { value: "" } });
     expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement();
+
+    fireEvent.blur(to);
     expect(screen.getByRole("alert")).toHaveTextContent('Enter a valid "To" date.');
   });
 
-  it("clamps dates outside min and max", () => {
-    const { onChange } = renderSelector({ value: ["2025-10-06", "2025-10-10"] });
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2025-09-01" } });
-    expect(onChange).toHaveBeenLastCalledWith(baseFilter, ["2025-10-06", "2025-10-10"]);
+  it("does not rewrite or send a partial year while someone types", () => {
+    const { onChange } = renderSelector({ value: ["2025-10-06", "2025-10-19"] });
+    const from = screen.getByLabelText("From");
 
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-01-01" } });
-    expect(onChange).toHaveBeenLastCalledWith(baseFilter, ["2025-10-06", "2025-10-19"]);
-    expect(screen.getByLabelText("To")).toHaveValue("2025-10-19");
+    // Chromium reports each partial year while the year segment is typed.
+    ["0002-10-12", "0020-10-12", "0202-10-12"].forEach((partial) => {
+      fireEvent.change(from, { target: { value: partial } });
+      expect(from).toHaveValue(partial);
+      expect(screen.getByRole("alert")).toBeEmptyDOMElement();
+    });
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(from, { target: { value: "2025-10-12" } });
+    expect(from).toHaveValue("2025-10-12");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(baseFilter, ["2025-10-12", "2025-10-19"]);
+  });
+
+  it("does not send an out-of-range date and explains the range on blur", () => {
+    const { onChange } = renderSelector({ value: ["2025-10-06", "2025-10-10"] });
+    const from = screen.getByLabelText("From");
+
+    fireEvent.change(from, { target: { value: "2025-09-01" } });
+    expect(from).toHaveValue("2025-09-01");
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(from);
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a date between 06/10/2025 and 19/10/2025.");
+    expect(from).toHaveAttribute("aria-invalid", "true");
+
+    fireEvent.change(from, { target: { value: "2025-10-07" } });
+    expect(onChange).toHaveBeenLastCalledWith(baseFilter, ["2025-10-07", "2025-10-10"]);
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement();
   });
 
   it("follows value changes from outside, such as a persisted restore", () => {

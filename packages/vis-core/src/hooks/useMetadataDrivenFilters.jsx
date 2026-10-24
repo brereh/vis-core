@@ -125,9 +125,9 @@ export function useMetadataDrivenFilters({ getInitialValue = null } = {}) {
     const built = (pageContext.config.filters || []).map((f) => {
       const id = buildDeterministicFilterId(f, used);
       const filter = { ...f, id };
-      uuidMap[f.paramName] = id;
-      // Multi-parameter filters (e.g. date ranges) are also findable by each parameter name.
+      // Multi-parameter filters (e.g. date ranges) are findable by each parameter name.
       if (isMultiParamFilter(f)) getFilterParamNames(f).forEach((name) => { uuidMap[name] = id; });
+      else uuidMap[f.paramName] = id;
 
       if (filter.type === "dateRange" && filter.values?.source === "metadataTable") {
         // Date ranges take their min/max from the metadata table instead of building options.

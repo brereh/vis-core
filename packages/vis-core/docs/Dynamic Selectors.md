@@ -51,4 +51,6 @@ When a filter specifies `excludeWhenMatches` (to enforce mutual exclusivity), th
 - **Slider**: Mutual exclusivity is inapplicable to sliders, so they solely honour the `disabled` state.
 - **DateRangeSelector**: Mutual exclusivity is inapplicable to a continuous date range, so it solely honours the `disabled` state. See [Date Range Selector](Date%20Range%20Selector.md).
 
+The target named by `disabledWhen.paramName` or `excludeWhenMatches` can be any parameter of a multi-parameter filter, such as `date_to` of a date range; the value of that parameter is used.
+
 Testing coverage for these behaviours is maintained in `SelectorSection.test.jsx`, which mounts the contexts and verifies that both properties correctly cascade down to every filter type.

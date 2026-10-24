@@ -540,6 +540,39 @@ describe("One customTooltip in the layer param", () => {
   });
 });
 
+describe("customTooltip with a multi-parameter filter", () => {
+  it("fills each date range placeholder with its own value", () => {
+    const dispatch = jest.fn();
+    const mapContext = {
+      state: {
+        ...mockMapContext.state,
+        paramNameToUuidMap: { date_from: "dates", date_to: "dates" },
+        filters: [{ id: "dates", type: "dateRange", paramName: ["date_from", "date_to"] }],
+      },
+      dispatch,
+    };
+    const layerProps = {
+      ...props,
+      layer: {
+        ...props.layer,
+        customTooltip: { url: "/tip?from={date_from}&to={date_to}", htmlTemplate: "<p>x</p>" },
+      },
+    };
+    render(
+      <FilterContext.Provider value={{ state: { dates: ["2025-10-06", "2025-10-19"] }, dispatch: jest.fn() }}>
+        <MapContext.Provider value={mapContext}>
+          <Layer {...layerProps} />
+        </MapContext.Provider>
+      </FilterContext.Provider>
+    );
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "UPDATE_LAYER_TOOLTIP_URL",
+      payload: { layerName: "Accessibility", requestUrl: "/tip?from=2025-10-06&to=2025-10-19" },
+    });
+  });
+});
+
 describe("Cleanup function to remove layers and sources when the component unmounts", () => {
   beforeEach(() => {
     props = {

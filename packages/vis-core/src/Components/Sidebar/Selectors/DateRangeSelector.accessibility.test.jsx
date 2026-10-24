@@ -31,18 +31,28 @@ describe("DateRangeSelector accessibility", () => {
       <DateRangeSelector filter={filter} value={["2025-10-06", "2025-10-10", false]} onChange={jest.fn()} />
     );
 
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2025-10-01" } });
-
-    // "To" is clamped to min, which is still before "From" once "From" moves later.
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2025-10-12" } });
 
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent('"From" date (12/10/2025) must be on or before "To" date (06/10/2025).');
+    expect(alert).toHaveTextContent('"From" date (12/10/2025) must be on or before "To" date (10/10/2025).');
     expect(screen.getByLabelText("From")).toHaveAccessibleDescription(
       expect.stringContaining("must be on or before")
     );
     expect(screen.getByLabelText("To")).toHaveAttribute("aria-invalid", "true");
 
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("announces an out-of-range date when the input loses focus", async () => {
+    const { container } = render(
+      <DateRangeSelector filter={filter} value={["2025-10-06", "2025-10-10", false]} onChange={jest.fn()} />
+    );
+    const to = screen.getByLabelText("To");
+    fireEvent.change(to, { target: { value: "2025-11-30" } });
+    fireEvent.blur(to);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a date between 06/10/2025 and 19/10/2025.");
+    expect(to).toHaveAccessibleDescription(expect.stringContaining("Choose a date between"));
     expect(await axe(container)).toHaveNoViolations();
   });
 });

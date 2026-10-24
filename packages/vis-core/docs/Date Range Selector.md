@@ -22,7 +22,7 @@ The `dateRange` filter type renders two labelled native date inputs ("From" and 
 | Property | Required | Description |
 | --- | --- | --- |
 | `paramName` | Yes | An array of two parameter names: the start date, then the end date. Names are not fixed, so any API naming works. |
-| `min`, `max` | No | The earliest and latest selectable ISO dates. Chosen dates are clamped to them. |
+| `min`, `max` | No | The earliest and latest selectable ISO dates. Set as the inputs' `min`/`max`; a date outside them is not sent. |
 | `values` | No | Reads `min` and `max` from a metadata table instead (see below). |
 | `defaultValue` | No | `[from, to]`. Each entry is an ISO date or the keyword `"min"` or `"max"`. Defaults to `["min", "max"]`. |
 | `locale` | No | A BCP 47 locale, such as `en-GB`. Used for the dates in the hint and error text, and set as the inputs' `lang`. Defaults to the browser's locale. |
@@ -47,11 +47,12 @@ The earliest value of `minColumn` (or `column`) becomes `min` and the latest val
 
 ## Behaviour
 
-- **Validation.** If "From" is after "To", or either date is cleared, nothing is sent. An inline error, such as `"From" date (15/10/2025) must be on or before "To" date (10/10/2025).`, is shown in a `role="alert"` region, and both inputs get `aria-invalid="true"` and an `aria-describedby` link to it.
-- **Clamping.** A date outside `min`/`max` is moved to the nearest bound, in the input and in the value sent.
+- **Typing.** The inputs are never rewritten while someone types, so keyboard entry works even though Chromium reports partial years (`0002-…`) on the way. A value is sent only once both dates are complete, within `min`/`max` and in order.
+- **Validation.** A reversed range shows an error at once, such as `"From" date (15/10/2025) must be on or before "To" date (10/10/2025).` An incomplete date (`Enter a valid "To" date.`) or a date outside the bounds (`Choose a date between 06/10/2025 and 19/10/2025.`) is reported when the input loses focus, so screen readers are not interrupted mid-typing. Errors are shown in a `role="alert"` region, and both inputs get `aria-invalid="true"` and an `aria-describedby` link to it.
 - **Display.** The browser draws native date inputs in its own locale. Every date vis-core writes itself (the "Available … to …" hint and the error text) uses `locale`. API values are always ISO.
 - **Extra toggle.** Ticking the checkbox sends the current dates with the new boolean value.
-- **Dynamic selectors.** `disabledWhen` disables both inputs and the checkbox. `excludeWhenMatches` does not apply to a continuous range and is ignored, as for sliders.
+- **Dynamic selectors.** `disabledWhen` disables both inputs and the checkbox. `excludeWhenMatches` does not apply to a continuous range and is ignored, as for sliders. A date range can also be the *target* of another filter's `disabledWhen` or `excludeWhenMatches`: name one of its parameters (e.g. `"date_to"`) and that parameter's value is compared.
+- **Tooltip URLs.** `{date_from}` and `{date_to}` placeholders in a layer's `customTooltip.url` are filled with their own dates.
 - **Persistence.** With `persistState: true`, the whole value is stored. On restore it is clamped to the current bounds, and an invalid range falls back to the default.
 
 ## OpenAPI validation
