@@ -51,6 +51,7 @@ export const brandTokens = {
     paleGrey: '#f7f7fb',
     bottomGrey: '#e5e7eb',
     textIcon: '#0d0f3d',
+    warning: '#b45309',
   },
   radii: {
     xxs: '6px',
@@ -85,6 +86,7 @@ export const brandThemeDefaults = {
     muted: brandTokens.palette.midGrey,
     border: brandTokens.palette.grey,
     navBorder: brandTokens.palette.bottomGrey,
+    warning: brandTokens.palette.warning,
   },
   mq: {
     mobile: '(max-width: 900px)',
