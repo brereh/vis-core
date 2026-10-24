@@ -59,7 +59,25 @@ Data is a flat array with one object per cell:
 
 ### Rows of different lengths
 
-Rows do not need the same columns. A row with no entry for a column leaves that cell empty, which is different from a missing cell (an entry flagged as missing, which is hatched). For example, hourly data with an `hour_index` column has 23 cells on the day the clocks go forward and 25 on the day they go back; the grid has 25 columns and shorter rows leave the last cells blank.
+Rows do not need the same columns. A row with no entry for a column leaves that cell empty, which is different from a missing cell (an entry flagged as missing, which is hatched).
+
+A column key must be unique within a row. If two records in a row share a column key, only the last is shown, and a warning is logged in development.
+
+Column labels come from the first row that has the column (or from `columnLabels.format`). Tooltips and the table use `cellLabelKey` when it is set, so each cell can show its own label.
+
+#### Clock-change days
+
+For hourly data, key columns on an elapsed-hour index, not on the clock time. On the day the clocks go back, one clock hour occurs twice, so a clock-time key would repeat and one hour would be lost. Use the clock-time field for labels instead:
+
+```js
+{
+  columnKey: "hour_index",                                   // 0–22, 0–23 or 0–24
+  columnLabels: { every: 3, key: "hour_start" },             // header labels
+  cellLabelKey: "hour_start",                                // tooltip label per cell
+}
+```
+
+The grid then has as many columns as the longest day. Shorter days leave their last cells blank. On those days, cells after the change sit under the labels of a normal day, so the tooltip shows the true clock time.
 
 ### Row markers
 
@@ -89,4 +107,4 @@ When `onRowSelect` is set, each row label is a button and clicking a cell also s
 
 - A **Show as table** toggle switches to a data table with every value, "No data" for missing cells and a Notes column for markers.
 - Colour is never the only signal: missing cells are hatched, markers use symbols, and struck-through labels also carry the marker name for screen readers.
-- Cell tooltips show the row, column and value on hover.
+- Cell tooltips show the row, column and value on hover. They are mouse-only: individual cells are not focusable, and the chart is exposed to assistive technology as a single image. **Show as table** is how keyboard and screen-reader users read cell values.

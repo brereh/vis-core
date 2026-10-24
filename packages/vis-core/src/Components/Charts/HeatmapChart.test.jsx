@@ -220,6 +220,19 @@ describe("heatmap helpers", () => {
     expect(model.max).toBe(5);
   });
 
+  it("warns once when a column key repeats within a row", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const model = buildHeatmapModel({ rowKey: "r", columnKey: "c" }, [
+      { r: 1, c: "01:00", value: 1 },
+      { r: 1, c: "01:00", value: 2 },
+      { r: 1, c: "01:00", value: 3 },
+      { r: 2, c: "01:00", value: 4 },
+    ]);
+    expect(model.rows[0].cells.size).toBe(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/2 cell\(s\).*row "1", column "01:00".*unique within a row/);
+  });
+
   it("resolves brewer schemes, colour arrays and the token default", () => {
     const theme = mergeThemeWithBrandDefaults();
     expect(getHeatmapColours("blues", 4, theme)).toHaveLength(4);

@@ -192,6 +192,16 @@ const VisuallyHidden = styled.span`
   border: 0;
 `;
 
+// True outside production builds. Bundlers replace process.env.NODE_ENV;
+// where nothing does, `process` is undefined and this returns false.
+const isDevelopment = () => {
+  try {
+    return process.env.NODE_ENV !== "production";
+  } catch {
+    return false;
+  }
+};
+
 const rowLabelKey = (config) => config.rowLabel || config.rowKey || "row";
 
 const isBlank = (v) => v === null || v === undefined || v === "";
@@ -296,6 +306,8 @@ export const buildHeatmapModel = (config, data) => {
   let min = Infinity;
   let max = -Infinity;
   let hasMissing = false;
+  let duplicate = null;
+  let duplicateCount = 0;
 
   (Array.isArray(data) ? data : []).forEach((record) => {
     const rKey = record?.[rowKey];
@@ -331,6 +343,11 @@ export const buildHeatmapModel = (config, data) => {
       max = Math.max(max, num);
     }
 
+    if (row.cells.has(String(cKey))) {
+      duplicateCount += 1;
+      duplicate = duplicate || { row: rKey, column: cKey };
+    }
+
     row.cells.set(String(cKey), {
       value: missing ? null : num,
       missing,
@@ -343,6 +360,14 @@ export const buildHeatmapModel = (config, data) => {
       }
     });
   });
+
+  if (duplicateCount && isDevelopment()) {
+    console.warn(
+      `HeatmapChart: ${duplicateCount} cell(s) repeat a row and column key already used ` +
+        `(first: row "${duplicate.row}", column "${duplicate.column}"); only the last is shown. ` +
+        `columnKey must be unique within a row.`
+    );
+  }
 
   const columns = Array.isArray(config.columns)
     ? config.columns.map((c) => columnLabelByKey.get(String(c)) || {
