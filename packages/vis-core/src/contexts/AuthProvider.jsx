@@ -6,17 +6,25 @@ import { jwtDecode } from 'jwt-decode';
 
 export const AuthContext = createContext();
 
+/** `detail` an API returns with a 401 when the password was right but a one-time code is needed. */
+export const MFA_REQUIRED = 'mfa_required';
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(Cookies.get('token') || '');
     const navigate = useNavigate();
 
-    const loginAction = async (username, password) => {
+    /**
+     * Signs in. `otp` is sent only when given, so APIs without a one-time code step see no change.
+     * If the API answers 401 with `{ detail: "mfa_required" }`, the rethrown error has
+     * `mfaRequired: true` so `Login` can ask for the code.
+     */
+    const loginAction = async (username, password, otp) => {
         try {
             const path = '/api/webusers/login'; // The API endpoint for login
 
             // Make POST request using BaseService
-            const usercred = { username, password };
+            const usercred = otp ? { username, password, otp } : { username, password };
             const response = await api.baseService.post(path, usercred, { skipAuth: true });
 
            
@@ -39,6 +47,10 @@ export const AuthProvider = ({ children }) => {
             Cookies.set('toc', false);
             navigate('/');
         } catch (err) {
+            if (err?.status === 401 && err?.body?.detail === MFA_REQUIRED) {
+                err.mfaRequired = true;
+                throw err;
+            }
             console.error('Login failed:', err);
             throw err;
         }

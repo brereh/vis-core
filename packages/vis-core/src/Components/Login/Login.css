@@ -72,3 +72,13 @@
 .login-box button:hover {
   background-color: #4500b5;
 }
+.login-box .login-secondary-button {
+  margin-top: 10px;
+  background-color: transparent;
+  color: var(--text-icon, #333);
+  border: 1px solid var(--palette-grey, #ccc);
+}
+
+.login-box .login-secondary-button:hover {
+  background-color: var(--palette-pale-grey, #f2f2f2);
+}

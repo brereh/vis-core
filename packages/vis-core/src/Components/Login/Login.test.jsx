@@ -102,6 +102,128 @@ describe("Login component test", () => {
     });
   });
 });
+describe("Login one-time code step", () => {
+  const mfaRequired = () =>
+    Object.assign(new Error("HTTP error! status: 401"), {
+      status: 401,
+      body: { detail: "mfa_required" },
+      mfaRequired: true,
+    });
+
+  const renderLogin = () =>
+    render(
+      <BrowserRouter>
+        <Login />
+      </BrowserRouter>
+    );
+
+  const signIn = async () => {
+    await userEvent.type(screen.getByLabelText(/User Name*/i), "testuser");
+    await userEvent.type(screen.getByLabelText(/Password*/i), "testpassword");
+    await userEvent.click(screen.getByRole("button", { name: /Continue/i }));
+  };
+
+  beforeEach(() => {
+    useNavigate.mockReturnValue(jest.fn());
+  });
+
+  it("shows the code step when the API answers mfa_required", async () => {
+    const mockLoginAction = jest.fn().mockRejectedValueOnce(mfaRequired());
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+
+    const codeInput = await screen.findByLabelText(/One-time code/i);
+    expect(codeInput).toHaveAttribute("inputmode", "numeric");
+    expect(codeInput).toHaveAttribute("autocomplete", "one-time-code");
+    expect(codeInput).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Verify/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Password*/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(mockLoginAction).toHaveBeenCalledWith("testuser", "testpassword");
+  });
+
+  it("sends username, password and code when the code is submitted", async () => {
+    const mockLoginAction = jest
+      .fn()
+      .mockRejectedValueOnce(mfaRequired())
+      .mockResolvedValueOnce(undefined);
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+    await userEvent.type(await screen.findByLabelText(/One-time code/i), "123 456");
+    await userEvent.click(screen.getByRole("button", { name: /Verify/i }));
+
+    await waitFor(() => {
+      expect(mockLoginAction).toHaveBeenLastCalledWith("testuser", "testpassword", "123456");
+    });
+    expect(mockLoginAction).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText(/One-time code/i)).toHaveValue("");
+  });
+
+  it("stays on the code step and explains when the code is wrong", async () => {
+    const mockLoginAction = jest
+      .fn()
+      .mockRejectedValueOnce(mfaRequired())
+      .mockRejectedValueOnce(mfaRequired());
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+    await userEvent.type(await screen.findByLabelText(/One-time code/i), "000000");
+    await userEvent.click(screen.getByRole("button", { name: /Verify/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/code was not accepted/i);
+    expect(screen.getByLabelText(/One-time code/i)).toHaveValue("");
+    expect(screen.getByLabelText(/One-time code/i)).toHaveFocus();
+  });
+
+  it("returns to step one with the usual message for any other error on the code step", async () => {
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const mockLoginAction = jest
+      .fn()
+      .mockRejectedValueOnce(mfaRequired())
+      .mockRejectedValueOnce(Object.assign(new Error("HTTP error! status: 429"), { status: 429 }));
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+    await userEvent.type(await screen.findByLabelText(/One-time code/i), "123456");
+    await userEvent.click(screen.getByRole("button", { name: /Verify/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid username or password");
+    expect(screen.getByLabelText(/User Name*/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/One-time code/i)).not.toBeInTheDocument();
+    consoleSpy.mockRestore();
+  });
+
+  it("Cancel returns to step one and clears the attempt", async () => {
+    const mockLoginAction = jest.fn().mockRejectedValueOnce(mfaRequired());
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+    await userEvent.type(await screen.findByLabelText(/One-time code/i), "12");
+    await userEvent.click(screen.getByRole("button", { name: /Cancel/i }));
+
+    const usernameInput = screen.getByLabelText(/User Name*/i);
+    expect(usernameInput).toHaveValue("");
+    expect(usernameInput).toHaveFocus();
+    expect(screen.getByLabelText(/Password*/i)).toHaveValue("");
+    expect(screen.queryByLabelText(/One-time code/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // A new attempt starts from scratch: no stale code is sent.
+    mockLoginAction.mockResolvedValueOnce(undefined);
+    await signIn();
+    await waitFor(() => {
+      expect(mockLoginAction).toHaveBeenLastCalledWith("testuser", "testpassword");
+    });
+  });
+});
+
 describe("Unauthorized component test", () => {
   it("All items are displayed", () => {
     render(

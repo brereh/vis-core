@@ -267,6 +267,7 @@ class BaseService {
    * @param {Object} [addOptions={}] - Additional options for the fetch request.
    * @param {boolean} [skipAuth=false] - Flag to skip adding Authorization header.
    * @returns {Promise<Object>} The response data.
+   * @throws {Error} On a non-2xx response, with `status` and, when the body is JSON, `body`.
    */
   async _post(path, data, addOptions = {}, skipAuth = false) {
     const url = this._buildUrl(path);
@@ -288,7 +289,15 @@ class BaseService {
       throw error;
     });
     if (!result.ok) {
-      throw new Error(`HTTP error! status: ${result.status}`);
+      const error = new Error(`HTTP error! status: ${result.status}`);
+      // Callers that need more than the message (for example a sign-in step) can read these.
+      error.status = result.status;
+      try {
+        error.body = await result.json();
+      } catch {
+        error.body = undefined;
+      }
+      throw error;
     }
     return await result.json();
   }

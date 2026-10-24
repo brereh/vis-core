@@ -149,4 +149,85 @@ describe("AuthProvider component test", () => {
       result.current.loginAction("testuser", "wrongpassword")
     ).rejects.toThrow("Login failed");
   });
+
+  describe("one-time code", () => {
+    const wrapper = ({ children }) => (
+      <MemoryRouter>
+        <AuthProvider>{children}</AuthProvider>
+      </MemoryRouter>
+    );
+
+    beforeEach(() => {
+      jwtDecode.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+    });
+
+    it("sends only username and password when no code is given", async () => {
+      api.baseService.post.mockResolvedValue({ token: "t" });
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await result.current.loginAction("testuser", "password123");
+
+      expect(api.baseService.post).toHaveBeenCalledWith(
+        "/api/webusers/login",
+        { username: "testuser", password: "password123" },
+        { skipAuth: true }
+      );
+    });
+
+    it("sends the code when one is given", async () => {
+      api.baseService.post.mockResolvedValue({ token: "t" });
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await result.current.loginAction("testuser", "password123", "123456");
+
+      expect(api.baseService.post).toHaveBeenCalledWith(
+        "/api/webusers/login",
+        { username: "testuser", password: "password123", otp: "123456" },
+        { skipAuth: true }
+      );
+      expect(mockedUsedNavigate).toHaveBeenCalledWith("/");
+    });
+
+    it("flags a 401 mfa_required response", async () => {
+      const error = Object.assign(new Error("HTTP error! status: 401"), {
+        status: 401,
+        body: { detail: "mfa_required" },
+      });
+      api.baseService.post.mockRejectedValue(error);
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await expect(
+        result.current.loginAction("testuser", "password123")
+      ).rejects.toMatchObject({ mfaRequired: true });
+      expect(Cookies.set).not.toHaveBeenCalled();
+      expect(mockedUsedNavigate).not.toHaveBeenCalled();
+    });
+
+    it("does not flag other errors", async () => {
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const failures = [
+        Object.assign(new Error("HTTP error! status: 401"), {
+          status: 401,
+          body: { detail: "Sign-in failed." },
+        }),
+        Object.assign(new Error("HTTP error! status: 401"), { status: 401 }),
+        Object.assign(new Error("HTTP error! status: 429"), {
+          status: 429,
+          body: { detail: "mfa_required" },
+        }),
+        new Error("Network down"),
+      ];
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      for (const failure of failures) {
+        api.baseService.post.mockRejectedValueOnce(failure);
+        const caught = await result.current
+          .loginAction("testuser", "password123")
+          .catch((err) => err);
+        expect(caught).toBe(failure);
+        expect(caught.mfaRequired).toBeUndefined();
+      }
+      consoleSpy.mockRestore();
+    });
+  });
 });
