@@ -27,3 +27,4 @@ export * from './adminPage'
 // from 'utils/metadataCache' to keep the barrel free of cycles.
 export { clearMetadataCache } from './metadataCache'
 export * from './auth'
+export * from './downloads'

@@ -15,6 +15,7 @@ import { replacePlaceholders, formatNumber, formatValueWithUnit } from "utils";
 import { Hovertip } from "Components/Hovertip/Hovertip";
 import { WarningBox } from "Components/MessageBox/MessageBox";
 import { ChartRenderer } from "Components/Charts/ChartRenderer";
+import { FeatureDownloadButton } from "Components/FeatureDownloadButton/FeatureDownloadButton";
 import { api } from 'services';
 import { actionTypes } from 'reducers/mapReducer';
 
@@ -320,6 +321,26 @@ const TogglePing = styled.span`
  * @param {any} value - Value to serialise.
  * @returns {string} JSON output when possible, otherwise `String(value)`.
  */
+const CardActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+`;
+
+/**
+ * Converts a visualisation params map ({ key: { value } }) to plain key/value pairs,
+ * dropping empty values.
+ *
+ * @param {Object} [paramsMap={}] - The params map.
+ * @returns {Object} Plain params.
+ */
+const toPlainParams = (paramsMap = {}) =>
+  Object.fromEntries(
+    Object.entries(paramsMap || {})
+      .filter(([, param]) => param?.value !== null && param?.value !== undefined)
+      .map(([key, param]) => [key, param.value])
+  );
+
 const safeStringify = (value) => {
   try {
     return JSON.stringify(value);
@@ -757,6 +778,32 @@ export const CalloutCardVisualisation = ({
       </>
     ) : null;
 
+  /**
+   * Renders the optional per-feature download button (`visualisation.download`).
+   * Placeholders resolve from the card data and the selected feature's path params;
+   * the filters are the card's current query params.
+   *
+   * @returns {JSX.Element|null} The download action row.
+   */
+  const renderDownload = () => {
+    if (!visualisation?.download || !data) return null;
+    const values = {
+      ...toPlainParams(visualisation.queryParams),
+      ...(data.mainValues || {}),
+      ...data,
+      ...toPlainParams(visualisation.pathParams),
+    };
+    return (
+      <CardActions>
+        <FeatureDownloadButton
+          download={visualisation.download}
+          values={values}
+          filters={toPlainParams(visualisation.queryParams)}
+        />
+      </CardActions>
+    );
+  };
+
   if (!visualisation) return null;
 
   if (isLoading) {
@@ -959,6 +1006,8 @@ export const CalloutCardVisualisation = ({
               })}
             </>
           )}
+
+          {renderDownload()}
         </CardContainer>
 
         {renderHandle()}
@@ -1007,6 +1056,8 @@ export const CalloutCardVisualisation = ({
             )}
           </>
         )}
+
+        {renderDownload()}
       </CardContainer>
 
       {renderHandle()}

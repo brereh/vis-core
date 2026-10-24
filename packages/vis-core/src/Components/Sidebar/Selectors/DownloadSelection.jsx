@@ -9,6 +9,7 @@ import { useFilterContext } from "hooks/useFilterContext";
 import { InfoBox } from "Components/MessageBox/MessageBox";
 import { api } from "services";
 import { checkSecurityRequirements, sortValues, isValidCondition, applyCondition } from "utils";
+import { getDownloadMetadataPath } from "utils/downloads";
 import { AppContext } from "contexts/AppContext";
 import { PageContext } from "contexts/PageContext";
 import { darken } from "polished";
@@ -146,7 +147,7 @@ export const DownloadSection = ({ filters, downloadPath, bgColor, requestMethod 
                 updatedFilters.push(filterWithId);
                 break;
               case 'api':
-                const path = '/api/tame/mvdata';
+                const path = getDownloadMetadataPath(pageContext?.config, appContext);
                 const dataPath = {
                   dataPath: pageContext.config.visualisations[0].dataPath,
                 };

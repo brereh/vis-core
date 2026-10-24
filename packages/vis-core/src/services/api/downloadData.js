@@ -48,6 +48,51 @@ function updateQueryParams(queryParams) {
   return cloned;
 }
 
+/**
+ * Reads a file name from a Content-Disposition header. Prefers the RFC 5987
+ * `filename*=UTF-8''...` form over plain `filename=`.
+ *
+ * @param {string} disposition - The header value.
+ * @returns {string|null} The file name, or null if none is present.
+ */
+export function filenameFromDisposition(disposition) {
+  if (!disposition) return null;
+  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;\n]*)/i.exec(disposition);
+  if (extended && extended[2]) {
+    try {
+      return decodeURIComponent(extended[2].trim().replace(/['"]/g, ""));
+    } catch {
+      // Fall through to the plain form.
+    }
+  }
+  const plain = /filename\s*=\s*((['"]).*?\2|[^;\n]*)/i.exec(disposition);
+  if (plain && plain[1]) return plain[1].trim().replace(/['"]/g, "") || null;
+  return null;
+}
+
+/**
+ * Reads a human-readable error detail from a failed response body, if any.
+ * Understands `{ detail }`, `{ message }` and `{ title }` JSON bodies and short text bodies.
+ *
+ * @param {Response} response - The failed fetch response.
+ * @returns {Promise<string|null>} The detail, or null.
+ */
+async function readErrorDetail(response) {
+  try {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+      const body = JSON.parse(text);
+      const detail = body?.detail ?? body?.message ?? body?.title;
+      return typeof detail === "string" ? detail : null;
+    } catch {
+      return text.length <= 300 ? text : null;
+    }
+  } catch {
+    return null;
+  }
+}
+
 export class DownloadService extends BaseService {
   /**
    * Constructs a new DownloadService instance.
@@ -94,8 +139,9 @@ export class DownloadService extends BaseService {
    * @property {boolean} [options.skipAuth=false] - Flag to skip adding Authorization header.
    * @property {Object} [options.headers={}] - Additional headers for the request.
    * @property {string} [options.method="GET"] - HTTP method to use for the request.
-   * @returns {Promise<void>} Resolves when the download is initiated.
-   * @throws {Error} If the GET request exceeds the maximum size limit.
+   * @returns {Promise<{filename: string}>} Resolves with the saved file name when the download is initiated.
+   * @throws {Error} If the GET request exceeds the maximum size limit, or the response is not OK
+   *   (the error carries `status` and, when the API sent one, `detail`).
    */
   async downloadFile(subPath = "", options = { queryParams: {}, skipAuth: false, headers: {}, method: "GET" }) {
     console.log(options?.queryParams);
@@ -135,7 +181,12 @@ export class DownloadService extends BaseService {
       throw error;
     });
 
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`HTTP error! status: ${response.status}`);
+      error.status = response.status;
+      error.detail = await readErrorDetail(response);
+      throw error;
+    }
 
     const blob = await response.blob();
 
@@ -162,9 +213,7 @@ export class DownloadService extends BaseService {
     // Extract filename from Content-Disposition header, if available
     const disposition = response.headers.get("Content-Disposition");
     if (disposition && disposition.indexOf("attachment") !== -1) {
-      const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-      const matches = filenameRegex.exec(disposition);
-      if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, "");
+      filename = filenameFromDisposition(disposition) || filename;
     }
     // Create a URL and trigger the download
     const urlBlob = window.URL.createObjectURL(blob);
@@ -176,5 +225,7 @@ export class DownloadService extends BaseService {
     // Clean up
     document.body.removeChild(link);
     window.URL.revokeObjectURL(urlBlob);
+
+    return { filename };
   }
 }
