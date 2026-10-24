@@ -180,6 +180,21 @@ describe("Login one-time code step", () => {
     expect(screen.getByLabelText(/One-time code/i)).toHaveFocus();
   });
 
+  it("does not send a code that is blank after trimming", async () => {
+    const mockLoginAction = jest.fn().mockRejectedValueOnce(mfaRequired());
+    useAuth.mockReturnValue({ loginAction: mockLoginAction });
+
+    renderLogin();
+    await signIn();
+    await userEvent.type(await screen.findByLabelText(/One-time code/i), "   ");
+    await userEvent.click(screen.getByRole("button", { name: /Verify/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/code was not accepted/i);
+    expect(mockLoginAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/One-time code/i)).toHaveValue("");
+    expect(screen.getByLabelText(/One-time code/i)).toHaveFocus();
+  });
+
   it("returns to step one with the usual message for any other error on the code step", async () => {
     const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const mockLoginAction = jest

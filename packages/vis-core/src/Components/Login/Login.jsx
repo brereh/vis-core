@@ -58,6 +58,12 @@ export const Login = () => {
         e.preventDefault();
         setError('');
         const code = otp.replace(/\s+/g, '');
+        if (!code) {
+            setOtp('');
+            setError(INVALID_CODE);
+            otpRef.current?.focus();
+            return;
+        }
 
         try {
             await loginAction(username, password, code);
