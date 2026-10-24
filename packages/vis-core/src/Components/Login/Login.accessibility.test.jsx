@@ -59,4 +59,30 @@ describe("Login accessibility", () => {
 
     consoleSpy.mockRestore();
   });
+
+  it("renders the one-time code step with no automated accessibility violations", async () => {
+    const mfaRequired = Object.assign(new Error("HTTP error! status: 401"), {
+      status: 401,
+      body: { detail: "mfa_required" },
+      mfaRequired: true,
+    });
+    useAuth.mockReturnValue({
+      loginAction: jest.fn().mockRejectedValue(mfaRequired),
+    });
+
+    const { container } = renderLogin();
+
+    await userEvent.type(screen.getByLabelText(/user name\*/i), "user");
+    await userEvent.type(screen.getByLabelText(/password\*/i), "secret");
+    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByLabelText(/one-time code\*/i)).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+
+    // And with the wrong-code error showing.
+    await userEvent.type(screen.getByLabelText(/one-time code\*/i), "000000");
+    await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/code was not accepted/i);
+    expect(await axe(container)).toHaveNoViolations();
+  });
 });
