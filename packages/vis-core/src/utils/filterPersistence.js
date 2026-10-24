@@ -5,6 +5,8 @@
  * to ensure proper identification across different pages.
  */
 
+import { getDefaultDateRangeValue, normaliseDateRangeValue } from "./dateRange";
+
 const FILTER_STORAGE_PREFIX = 'filter_state_';
 
 /**
@@ -151,6 +153,11 @@ export const isPersistedValueValid = (filter, persistedValue) => {
     return false;
   }
 
+  // Date ranges are valid when both dates parse and are in order; bounds are clamped later.
+  if (filter.type === "dateRange") {
+    return normaliseDateRangeValue({ ...filter, min: null, max: null }, persistedValue) !== null;
+  }
+
   // For filters without values (like map filters), we can't validate
   if (!filter.values || !filter.values.values) {
     return true;
@@ -177,6 +184,16 @@ export const isPersistedValueValid = (filter, persistedValue) => {
  * @returns {any} The initial value to use for the filter
  */
 export const getInitialFilterValue = (filter) => {
+  if (filter.type === "dateRange") {
+    // A persisted range is clamped to the current min/max, then falls back to the default.
+    const persistedValue = filter.persistState ? loadFilterState(filter) : null;
+    const restored =
+      persistedValue !== null && isPersistedValueValid(filter, persistedValue)
+        ? normaliseDateRangeValue(filter, persistedValue)
+        : null;
+    return restored ?? getDefaultDateRangeValue(filter);
+  }
+
   // First, try to load persisted state if persistence is enabled
   if (filter.persistState) {
     const persistedValue = loadFilterState(filter);

@@ -5,6 +5,8 @@ import { api } from "services";
 import { updateFilterValidity, correctInitialCrossFilterValues, correctRuntimeCrossFilterValues } from "utils";
 import { applyWhereConditions, sortValues, buildDeterministicFilterId } from "utils";
 import { fetchWithCache } from "utils/metadataCache";
+import { getFilterParamNames, isMultiParamFilter } from "utils/filterParams";
+import { getDateBoundColumns, getDateBoundsFromRows, getDefaultDateRangeValue } from "utils/dateRange";
 
 /**
  * callMetadataEndpoint
@@ -124,8 +126,26 @@ export function useMetadataDrivenFilters({ getInitialValue = null } = {}) {
       const id = buildDeterministicFilterId(f, used);
       const filter = { ...f, id };
       uuidMap[f.paramName] = id;
+      // Multi-parameter filters (e.g. date ranges) are also findable by each parameter name.
+      if (isMultiParamFilter(f)) getFilterParamNames(f).forEach((name) => { uuidMap[name] = id; });
 
-      if (filter.values?.source === "metadataTable") {
+      if (filter.type === "dateRange" && filter.values?.source === "metadataTable") {
+        // Date ranges take their min/max from the metadata table instead of building options.
+        const table = metadataTables[filter.values.metadataTableName] || [];
+        const rows = filter.values.where ? applyWhereConditions(table, filter.values.where) : table;
+        const { minColumn, maxColumn } = getDateBoundColumns(filter.values);
+        const { min, max } = getDateBoundsFromRows(rows, minColumn, maxColumn);
+        if (min) filter.min = min;
+        if (max) filter.max = max;
+
+        if (!filter.min || !filter.max) {
+          emptyFilters.push({
+            filterName: filter.filterName,
+            paramName: filter.paramName,
+            metadataTableName: filter.values.metadataTableName,
+          });
+        }
+      } else if (filter.values?.source === "metadataTable") {
         const table = metadataTables[filter.values.metadataTableName] || [];
         let rows = table;
         if (filter.values.where) rows = applyWhereConditions(table, filter.values.where);
@@ -183,6 +203,7 @@ export function useMetadataDrivenFilters({ getInitialValue = null } = {}) {
     if (!filtersWithIds.length) return;
 
     const computeDefault = getInitialValue || ((f) => {
+      if (f.type === "dateRange") return getDefaultDateRangeValue(f);
       if (f.shouldBeBlankOnInit) return null;
       if (f.multiSelect && f.shouldInitialSelectAllInMultiSelect) {
         return f.defaultValue ?? f.min ?? (f.values?.values || []).map((v) => v.paramValue);

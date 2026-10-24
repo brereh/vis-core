@@ -1,4 +1,5 @@
 import { formatNumber, formatOrdinal } from "./text";
+import { filterHasParam } from "./filterParams";
 
 const autoFormatSimpleValue = (value) => {
   // numbers: format >= 1000 with commas
@@ -323,7 +324,7 @@ export function filterGlossaryData(glossaryData, excludeList) {
  * @returns {boolean} - Returns true if the specified paramName is found and forceRequired is true, otherwise returns false.
  */
 export function isParamNameForceRequired(filters, targetParamName) {
-  const filter = filters.find((f) => f.paramName === targetParamName);
+  const filter = filters.find((f) => filterHasParam(f, targetParamName));
   return filter ? filter.forceRequired === true : false;
 }
 

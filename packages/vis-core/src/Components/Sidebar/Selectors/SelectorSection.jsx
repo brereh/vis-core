@@ -14,10 +14,12 @@ import { useState, useContext, useEffect, useCallback, useRef } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { MapFeatureSelect, MapFeatureSelectWithControls } from "./MapFeatureSelect";
 import { CheckboxSelector } from './CheckboxSelector';
+import { DateRangeSelector } from './DateRangeSelector';
 import { MapFeatureSelectAndPan } from './MapFeatureSelectAndPan';
 import { api } from "services";
 import { darken } from "polished";
 import { checkSecurityRequirements } from "utils";
+import { expandFilterParamValues } from "utils/filterParams";
 
 const ButtonRow = styled.div`
   display: flex;
@@ -133,7 +135,7 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
     const queryParams = {};
     filters.forEach(filter => {
       if (!["fixed", "hidetoggle", "mapViewport"].includes(filter.type) && filter.paramName) {
-        queryParams[filter.paramName] = filterState[filter.id];
+        Object.assign(queryParams, expandFilterParamValues(filter, filterState[filter.id]));
       }
     });
     
@@ -161,7 +163,7 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
     const queryParams = {};
     filters.forEach(filter => {
       if (!["fixed", "mapViewport"].includes(filter.type) && filter.paramName) {
-        queryParams[filter.paramName] = filterState[filter.id];
+        Object.assign(queryParams, expandFilterParamValues(filter, filterState[filter.id]));
       }
     });
     
@@ -382,6 +384,16 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
                       }
                       onChange={handleFilterChange}
                       bgColor={bgColor}
+                      disabled={isDisabled}
+                      excludeValue={excludeValue}
+                    />
+                  )}
+                  {filter.type === "dateRange" && (
+                    <DateRangeSelector
+                      key={filter.id}
+                      filter={filter}
+                      value={filterState[filter.id]}
+                      onChange={handleFilterChange}
                       disabled={isDisabled}
                       excludeValue={excludeValue}
                     />

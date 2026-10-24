@@ -27,6 +27,7 @@ When a filter's `disabledWhen` property evaluates to true (based on operators su
 - **Toggle**: The container is set to `opacity: 0.45` and `pointer-events: none`, preventing interaction with individual buttons or the 'Toggle All' functionality.
 - **CheckboxSelector**: Cascades the `disabled` state to native `<input type="checkbox">` elements, sets `cursor: not-allowed`, and blocks the 'Select All' button.
 - **Slider**: Disables the native range `<input>`, sets opacity to 0.45, and applies `pointer-events: none`.
+- **DateRangeSelector**: Disables both native date inputs and the optional extra toggle checkbox, sets opacity to 0.45, and applies `pointer-events: none`.
 - **MapFeatureSelect (and variants)**: The `react-select` component receives `isDisabled={true}`, locking text input and dropdowns. For variants with controls, accompanying buttons (like 'Enable Selector' and 'Rectangle Select') are dynamically disabled alongside the main dropdown.
 
 ## Excluding values
@@ -48,5 +49,6 @@ When a filter specifies `excludeWhenMatches` (to enforce mutual exclusivity), th
 - **Toggle**: Strips the `excludeValue` from the toggle options, removing the corresponding button from the DOM.
 - **CheckboxSelector**: Filters out the `excludeValue` from the rendered list of checkboxes.
 - **Slider**: Mutual exclusivity is inapplicable to sliders, so they solely honour the `disabled` state.
+- **DateRangeSelector**: Mutual exclusivity is inapplicable to a continuous date range, so it solely honours the `disabled` state. See [Date Range Selector](Date%20Range%20Selector.md).
 
 Testing coverage for these behaviours is maintained in `SelectorSection.test.jsx`, which mounts the contexts and verifies that both properties correctly cascade down to every filter type.

@@ -326,3 +326,7 @@ Filter IDs are generated dynamically and can change between sessions or page loa
 - [x] `shouldInitialSelectAllInMultiSelect` doesn't override persisted state
 - [x] MapContext initialization respects persisted values
 - [x] Debug logging helps troubleshoot persistence issues
+
+## Date range filters
+
+`dateRange` filters persist their whole value (`[from, to]`, plus the extra toggle when configured). On restore, `getInitialFilterValue` clamps the persisted dates to the filter's current `min`/`max`. A persisted range that is malformed, or whose `from` ends up after `to`, is discarded in favour of the configured default. See [Date Range Selector](Date%20Range%20Selector.md).

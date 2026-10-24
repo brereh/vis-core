@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { SelectorSection } from ".";
 import { MapContext, FilterContext, AppContext } from "contexts";
 import userEvent from "@testing-library/user-event";
+import { api } from "services";
 
 jest.mock("maplibre-gl", () => ({
   Map: jest.fn(() => ({
@@ -451,5 +452,74 @@ describe("SelectorSection component test", () => {
     // Ensure we checked exactly the number of filters total (1 target + 7 dependent = 8)
     expect(disabledNodes.length).toBe(8);
     expect(excludeValueNodes.length).toBe(8);
+  });
+
+  describe("dateRange filters", () => {
+    const controller = {
+      type: "dropdown",
+      id: "timePeriodId",
+      paramName: "time_period",
+      values: [],
+    };
+    const dateRangeFilter = {
+      type: "dateRange",
+      id: "surveyDatesId",
+      filterName: "Survey dates",
+      paramName: ["date_from", "date_to"],
+      min: "2025-10-06",
+      max: "2025-10-19",
+      extraToggle: { paramName: "include_excluded", label: "Include excluded days" },
+      disabledWhen: { paramName: "time_period", operator: "equals", value: "disabled" },
+    };
+
+    const renderWith = (timePeriod) => {
+      const filterContext = {
+        ...mockFilterContext,
+        state: { timePeriodId: timePeriod, surveyDatesId: ["2025-10-07", "2025-10-08", true] },
+      };
+      render(
+        <AppContext.Provider value={mockAppContexte}>
+          <MapContext.Provider value={{ state: mockState, dispatch }}>
+            <FilterContext.Provider value={filterContext}>
+              <SelectorSection {...props} filters={[controller, dateRangeFilter]} />
+            </FilterContext.Provider>
+          </MapContext.Provider>
+        </AppContext.Provider>
+      );
+    };
+
+    it("renders the date range selector with its current value", () => {
+      renderWith("am");
+      expect(screen.getByLabelText("From")).toHaveValue("2025-10-07");
+      expect(screen.getByLabelText("To")).toHaveValue("2025-10-08");
+      expect(screen.getByLabelText("From")).not.toBeDisabled();
+      expect(screen.getByRole("checkbox", { name: "Include excluded days" })).toBeChecked();
+    });
+
+    it("honours disabledWhen", () => {
+      renderWith("disabled");
+      expect(screen.getByLabelText("From")).toBeDisabled();
+      expect(screen.getByLabelText("To")).toBeDisabled();
+      expect(screen.getByRole("checkbox")).toBeDisabled();
+    });
+
+    it("sends every date range parameter with a download", async () => {
+      const downloadFile = jest.spyOn(api.downloadService, "downloadFile").mockResolvedValue();
+      window.clarity = jest.fn();
+      renderWith("am");
+
+      await userEvent.click(screen.getByRole("button", { name: "Download as CSV" }));
+
+      await waitFor(() => expect(downloadFile).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Download as CSV" })).not.toBeDisabled());
+      expect(downloadFile.mock.calls[0][1].queryParams).toEqual({
+        time_period: "am",
+        date_from: "2025-10-07",
+        date_to: "2025-10-08",
+        include_excluded: true,
+      });
+      downloadFile.mockRestore();
+      delete window.clarity;
+    });
   });
 });
