@@ -51,6 +51,9 @@ export const brandTokens = {
     paleGrey: '#f7f7fb',
     bottomGrey: '#e5e7eb',
     textIcon: '#0d0f3d',
+    // Status tones for warnings and errors; both meet 4.5:1 contrast on white.
+    warning: '#b45309',
+    danger: '#b42318',
   },
   radii: {
     xxs: '6px',
@@ -85,6 +88,8 @@ export const brandThemeDefaults = {
     muted: brandTokens.palette.midGrey,
     border: brandTokens.palette.grey,
     navBorder: brandTokens.palette.bottomGrey,
+    warning: brandTokens.palette.warning,
+    danger: brandTokens.palette.danger,
   },
   mq: {
     mobile: '(max-width: 900px)',
