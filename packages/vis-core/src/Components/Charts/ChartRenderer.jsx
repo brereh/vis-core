@@ -1295,20 +1295,22 @@ const LineSeriesChart = ({ config, data, formatters, chartUiColors, brandColor }
   );
   const enhanced = useLineChartEnhancements(config, items, "label", theme, "left");
   const height = config.height ?? DEFAULTS.DIMENSIONS.baseHeight;
+  // Only the new `colour` field resolves token names; existing colour props are used as given.
   const stroke =
-    resolveColourToken(
-      config.lineColor || config.series?.[0]?.colour || config.series?.[0]?.color,
-      theme
-    ) || brandColor;
+    config.lineColor ||
+    resolveColourToken(config.series?.[0]?.colour, theme) ||
+    config.series?.[0]?.color ||
+    brandColor;
 
   const comparatorKey = config.comparatorKey || "dmValue";
   const comparatorLabel = config.comparatorLabel || "Comparator";
   const primaryLabel = config.primaryLabel || "Value";
   const comparatorStroke =
-    resolveColourToken(
-      config.comparatorColor || config.series?.[1]?.colour || config.series?.[1]?.color,
-      theme
-    ) || chartUiColors?.comparator || "#767676";
+    config.comparatorColor ||
+    resolveColourToken(config.series?.[1]?.colour, theme) ||
+    config.series?.[1]?.color ||
+    chartUiColors?.comparator ||
+    "#767676";
 
   const [hiddenSeries, setHiddenSeries] = React.useState({});
   const toggleSeries = (e) => {
@@ -1653,10 +1655,10 @@ const MultipleLineChart = ({ config, data, formatters }) => {
             dataKey={col.key}
             name={col.label}
             stroke={
-              resolveColourToken(
-                (config.colors && config.colors[col.key]) || col.colour || col.color,
-                theme
-              ) || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
+              (config.colors && config.colors[col.key]) ||
+              resolveColourToken(col.colour, theme) ||
+              col.color ||
+              DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
             }
             strokeWidth={2}
             dot={false}

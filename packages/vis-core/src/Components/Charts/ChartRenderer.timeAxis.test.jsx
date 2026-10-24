@@ -81,7 +81,7 @@ describe("ChartRenderer line time axis, gaps and bands", () => {
     linePaths(container).forEach((p) => expect(moveCount(p)).toBe(1));
   });
 
-  it("breaks a single line chart at nulls and keeps nulls from object data", () => {
+  it("breaks a single line chart at nulls on a time axis", () => {
     const { container } = render(
       <ChartRenderer
         charts={[
@@ -104,6 +104,60 @@ describe("ChartRenderer line time axis, gaps and bands", () => {
     );
     const [path] = linePaths(container);
     expect(moveCount(path)).toBe(2);
+  });
+
+  it("keeps nulls from object data when connectNulls is false", () => {
+    const { container } = render(
+      <ChartRenderer
+        charts={[
+          {
+            type: "line",
+            title: "Columns",
+            columns: [
+              { key: "a", label: "A" },
+              { key: "b", label: "B" },
+              { key: "c", label: "C" },
+              { key: "d", label: "D" },
+            ],
+            connectNulls: false,
+          },
+        ]}
+        data={{ a: 1, b: null, c: 3, d: 4 }}
+      />
+    );
+    expect(moveCount(linePaths(container)[0])).toBe(2);
+  });
+
+  it("still plots null object values as 0 by default", () => {
+    const { container } = render(
+      <ChartRenderer
+        charts={[
+          {
+            type: "line",
+            title: "Columns",
+            columns: [
+              { key: "a", label: "A" },
+              { key: "b", label: "B" },
+              { key: "c", label: "C" },
+              { key: "d", label: "D" },
+            ],
+          },
+        ]}
+        data={{ a: 1, b: null, c: 3, d: 4 }}
+      />
+    );
+    const path = linePaths(container)[0];
+    expect(moveCount(path)).toBe(1);
+    // The b point sits on the zero line: the lowest point in the path.
+    const ys = path
+      .getAttribute("d")
+      .split(/[MLC]/)
+      .filter((seg) => seg.trim())
+      .map((seg) => {
+        const nums = seg.match(/-?[\d.]+(?:e-?\d+)?/g).map(Number);
+        return nums[nums.length - 1];
+      });
+    expect(ys[1]).toBe(Math.max(...ys));
   });
 
   it("places time ticks at the requested interval", () => {
@@ -220,6 +274,19 @@ describe("ChartRenderer line time axis, gaps and bands", () => {
       />
     );
     expect(linePaths(container)[0]).toHaveAttribute("stroke", "#b45309");
+  });
+
+  it("uses existing colour props as given, without token lookup", () => {
+    const { container } = render(
+      <ChartRenderer
+        charts={[{ type: "line", title: "Keyword", lineColor: "teal" }]}
+        data={[
+          { year: 2026, value: 1 },
+          { year: 2030, value: 2 },
+        ]}
+      />
+    );
+    expect(linePaths(container)[0]).toHaveAttribute("stroke", "teal");
   });
 
   it("supports bands on a category axis without a time axis", () => {
