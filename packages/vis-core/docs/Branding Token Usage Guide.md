@@ -39,6 +39,8 @@ Use from `theme.colors.*`, `theme.*`, or CSS vars:
 - Border fallback (static/legacy CSS): `var(--palette-grey)`
 - Nav border (override-friendly): `theme.colors.navBorder`
 - Nav border fallback (static/legacy CSS): `var(--palette-bottom-grey)`
+- Warning tone (override-friendly): `theme.colors.warning`
+- Danger/error tone (override-friendly): `theme.colors.danger`
 
 ### Typography
 - Base copy: `theme.standardFontFamily` / `var(--font-family-base)`
