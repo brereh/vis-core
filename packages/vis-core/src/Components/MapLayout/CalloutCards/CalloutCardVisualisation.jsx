@@ -81,6 +81,7 @@ const CardContainer = styled.div`
 
   ${({ $docked }) => $docked && `
     width: 100%;
+    padding: 12px;
     box-sizing: border-box;
     flex-shrink: 1;
     box-shadow: none;
@@ -1016,6 +1017,7 @@ export const CalloutCardVisualisation = ({
                         formatters={customFormattingFunctions}
                         onRowClick={handleRowClick}
                         barHeight={225}
+                        compact={docked}
                       />
                     </CardContent>
                   );
@@ -1062,6 +1064,7 @@ export const CalloutCardVisualisation = ({
                     formatters={customFormattingFunctions}
                     onRowClick={handleRowClick}
                     barHeight={225}
+                    compact={docked}
                   />
                 </CardContent>
               )}

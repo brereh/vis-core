@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import styled from "styled-components";
 import { darken } from "polished";
-import { AccordionSection, TextSection, AccordionIcon } from "./Accordion";
+import { AccordionSection, TextSection, AccordionIcon, AccordionHeader } from "./Accordion";
 import { SelectorSection } from "./Selectors";
 import { Glossary } from "Components/Glossary";
 import { Hovertip } from "Components/Hovertip/Hovertip";
@@ -103,22 +103,44 @@ const SidebarContainer = styled.div`
     }
   `}`;
 
-// Docked layout: a static, full-height column with no overlay or collapse toggle.
+// Docked layout: a static, full-height column with no overlay or collapse toggle,
+// and denser content than the overlay sidebar (14px text, 36px accordion rows,
+// 32px controls). Focus outlines are left to the controls' own styles.
 const DockedSidebarContainer = styled.div`
   height: 100%;
-  padding: 16px;
+  padding: 12px;
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   text-align: left;
+  font-size: 0.875rem;
   background-color: var(--palette-white);
   border-right: 1px solid var(--palette-mid-grey);
+
+  ${SidebarHeader} {
+    font-size: 1.125rem;
+    margin: 0 0 4px;
+    max-width: none;
+  }
+
+  ${AccordionHeader} {
+    min-height: 36px;
+    padding: 6px 10px;
+    margin-top: 4px;
+    font-size: 0.875rem;
+  }
+
+  /* react-select controls */
+  [class*="-control"] {
+    min-height: 32px;
+  }
 `;
 
 const DockedDescription = styled.p`
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   padding-left: 5px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
   color: var(--text-icon);
 `;
 

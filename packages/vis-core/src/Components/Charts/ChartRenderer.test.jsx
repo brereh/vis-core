@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { ChartRenderer, ChartTooltip, wrapLabel } from "./ChartRenderer";
+import { ChartRenderer, ChartTooltip, wrapLabel, COMPACT_CHART_HEIGHT } from "./ChartRenderer";
 
 beforeAll(() => {
   global.ResizeObserver = class {
@@ -33,6 +33,44 @@ describe("ChartRenderer", () => {
     expect(screen.getByText("Income Per Household (Difference)")).toBeInTheDocument();
     expect(screen.getByText("/ £/week")).toBeInTheDocument();
     expect(screen.getByText("Year")).toBeInTheDocument();
+  });
+
+  describe("compact (docked layout)", () => {
+    const data = [
+      { year: 2026, value: 500 },
+      { year: 2030, value: 650 },
+    ];
+    const chartHeights = (container) =>
+      Array.from(container.querySelectorAll("div[style]"))
+        .map((el) => el.style.height)
+        .filter(Boolean);
+
+    it("keeps the default chart height when not compact", () => {
+      const { container } = render(
+        <ChartRenderer charts={[{ type: "line", title: "Flow", y_axis_title: "Count", units: "veh" }]} data={data} />
+      );
+      expect(chartHeights(container)).toContain("220px");
+    });
+
+    it("uses the compact height and at least 11px axis text", () => {
+      const { container } = render(
+        <ChartRenderer
+          compact
+          charts={[{ type: "line", title: "Flow", y_axis_title: "Count", units: "veh" }]}
+          data={data}
+        />
+      );
+      expect(chartHeights(container)).toContain(`${COMPACT_CHART_HEIGHT}px`);
+      expect(chartHeights(container)).not.toContain("220px");
+      expect(window.getComputedStyle(screen.getByText("/ veh")).fontSize).toBe("11px");
+    });
+
+    it("respects a chart's own height", () => {
+      const { container } = render(
+        <ChartRenderer compact charts={[{ type: "line", title: "Flow", height: 260 }]} data={data} />
+      );
+      expect(chartHeights(container)).toContain("260px");
+    });
   });
 
   it("does not duplicate unit if already in the axis title", () => {

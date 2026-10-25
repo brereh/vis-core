@@ -132,6 +132,7 @@ describe("MapLayout docked layout", () => {
     renderLayout({ config: { layout: "docked" } });
 
     expect(window.getComputedStyle(screen.getByText("Counts at permanent sites.")).color).toBe("var(--text-icon)");
+    expect(window.getComputedStyle(screen.getByText("Counts at permanent sites.")).fontSize).toBe("0.875rem");
     expect(
       window.getComputedStyle(screen.getByText("Click a feature on the map to see its summary")).color
     ).toBe("var(--text-icon)");
@@ -182,6 +183,31 @@ describe("MapLayout docked layout", () => {
     expect(within(screen.getByTestId("map")).getByText("Zone summary card")).toBeInTheDocument();
     expect(screen.getByText("Filters", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Zone summary" })).toHaveAttribute("data-docked", "false");
+  });
+
+  describe("column widths", () => {
+    const widths = () => ({
+      filters: window.getComputedStyle(screen.getByRole("complementary", { name: "Filters" })).width,
+      selection: window.getComputedStyle(screen.getByRole("complementary", { name: "Selected feature" })).width,
+    });
+
+    it("defaults to 320px and 360px", () => {
+      renderLayout({ config: { layout: "docked" } });
+      expect(widths()).toEqual({ filters: "320px", selection: "360px" });
+    });
+
+    it("uses the page config", () => {
+      renderLayout({ config: { layout: "docked", dockedFilterWidth: 300, dockedSelectionWidth: "24rem" } });
+      expect(widths()).toEqual({ filters: "300px", selection: "24rem" });
+    });
+
+    it("uses the app defaults, with the page value winning", () => {
+      renderLayout({
+        config: { layout: "docked", dockedSelectionWidth: 400 },
+        appContext: { defaultDockedFilterWidth: 340, defaultDockedSelectionWidth: 380 },
+      });
+      expect(widths()).toEqual({ filters: "340px", selection: "400px" });
+    });
   });
 
   it("has no automated accessibility violations", async () => {

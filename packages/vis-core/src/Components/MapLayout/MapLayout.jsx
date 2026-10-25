@@ -61,6 +61,21 @@ const MobileLegendSlot = styled.section`
 export const DOCKED_LAYOUT_MIN_WIDTH = 1100;
 const DOCKED_LAYOUT_QUERY = `(min-width: ${DOCKED_LAYOUT_MIN_WIDTH}px)`;
 const DEFAULT_DOCKED_PROMPT = "Click a feature on the map to see its summary";
+export const DEFAULT_DOCKED_FILTER_WIDTH = 320;
+export const DEFAULT_DOCKED_SELECTION_WIDTH = 360;
+
+/**
+ * Turns a configured column width into CSS: numbers are pixels, strings pass through.
+ *
+ * @param {number|string|undefined} value - Configured width.
+ * @param {number} fallback - Default width in pixels.
+ * @returns {string} CSS width.
+ */
+const toCssWidth = (value, fallback) => {
+  if (typeof value === "number" && Number.isFinite(value)) return `${value}px`;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return `${fallback}px`;
+};
 
 /**
  * Tracks whether the viewport is wide enough for the docked layout.
@@ -91,15 +106,17 @@ const useDockedLayout = (enabled) => {
 };
 
 const DockedFiltersColumn = styled.aside`
-  flex: 0 0 420px;
+  flex: 0 0 auto;
+  width: ${({ $width }) => $width};
   height: 100%;
   overflow: hidden;
 `;
 
 const DockedFeatureColumn = styled.aside`
-  flex: 0 0 460px;
+  flex: 0 0 auto;
+  width: ${({ $width }) => $width};
   height: 100%;
-  padding: 16px;
+  padding: 12px;
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
@@ -161,6 +178,14 @@ export const MapLayout = () => {
   );
   const isDocked = useDockedLayout(
     requestedLayout === "docked" && pageContext.type === "MapLayout" && !hasFullscreenCard
+  );
+  const dockedFilterWidth = toCssWidth(
+    pageContext.config?.dockedFilterWidth ?? appContext?.defaultDockedFilterWidth,
+    DEFAULT_DOCKED_FILTER_WIDTH
+  );
+  const dockedSelectionWidth = toCssWidth(
+    pageContext.config?.dockedSelectionWidth ?? appContext?.defaultDockedSelectionWidth,
+    DEFAULT_DOCKED_SELECTION_WIDTH
   );
   const [calloutSlot, setCalloutSlot] = useState(null);
   const [selection, setSelection] = useState({ hasSelection: false, announcement: "" });
@@ -545,7 +570,7 @@ export const MapLayout = () => {
       />
       <DynamicStylingStatus isResolving={isDynamicStylingLoading} />
       {isDocked ? (
-        <DockedFiltersColumn aria-label="Filters">{sidebarElement}</DockedFiltersColumn>
+        <DockedFiltersColumn aria-label="Filters" $width={dockedFilterWidth}>{sidebarElement}</DockedFiltersColumn>
       ) : (
         sidebarElement
       )}
@@ -556,7 +581,7 @@ export const MapLayout = () => {
         </MapContainer>
       )}
       {isDocked && (
-        <DockedFeatureColumn aria-label="Selected feature">
+        <DockedFeatureColumn aria-label="Selected feature" $width={dockedSelectionWidth}>
           <VisuallyHidden aria-live="polite" role="status">
             {selection.announcement}
           </VisuallyHidden>
