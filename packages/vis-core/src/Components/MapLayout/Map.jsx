@@ -107,6 +107,17 @@ const Map = (props) => {
   const listenerCallbackRef = useRef({});
   const hoverIdRef = useRef({});
   const sidebarIsOpen = props.sidebarIsOpen
+
+  // Docked layout: the container is sized by fixed side columns rather than the
+  // window, so keep MapLibre's canvas in step with the container itself.
+  useEffect(() => {
+    if (!props.resizeWithContainer || !map) return undefined;
+    map.resize?.();
+    if (typeof ResizeObserver === "undefined" || !mapContainerRef.current) return undefined;
+    const observer = new ResizeObserver(() => map.resize?.());
+    observer.observe(mapContainerRef.current);
+    return () => observer.disconnect();
+  }, [map, props.resizeWithContainer]);
   
   /**
    * Generates HTML for metadata section of tooltips

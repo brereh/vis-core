@@ -4,6 +4,7 @@ import { MapVisualisation } from "./MapVisualisation";
 import { CalloutCardVisualisation } from "./CalloutCards/CalloutCardVisualisation";
 import { FullScreenCalloutCardVisualisation } from "./CalloutCards/FullScreenCalloutCardVisualisation";
 import { BaseCalloutCardVisualisation } from "./CalloutCards/BaseCalloutCardVisualisation";
+import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 
 const UPDATE_MARKER_TIMEOUT_MS = 2800;
 
@@ -152,6 +153,13 @@ export const VisualisationManager = ({
   }, []);
 
   const showOnMobile = calloutCardVisualisations.length > 0;
+
+  // Docked layout: tell the right-hand column whether any card has content, so it
+  // can swap between the cards and the page's prompt text.
+  const setDockedHasSelection = useDockedLayoutContext()?.setHasSelection;
+  useEffect(() => {
+    setDockedHasSelection?.(visibleCount > 0);
+  }, [setDockedHasSelection, visibleCount]);
 
   /**
    * Keeps card order, visibility, first-visible tracking, and update markers in

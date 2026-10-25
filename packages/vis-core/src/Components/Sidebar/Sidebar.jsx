@@ -103,6 +103,25 @@ const SidebarContainer = styled.div`
     }
   `}`;
 
+// Docked layout: a static, full-height column with no overlay or collapse toggle.
+const DockedSidebarContainer = styled.div`
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  text-align: left;
+  background-color: var(--palette-white);
+  border-right: 1px solid var(--palette-mid-grey);
+`;
+
+const DockedDescription = styled.p`
+  margin: 0 0 12px;
+  padding-left: 5px;
+  font-size: 0.9rem;
+  color: var(--palette-grey);
+`;
+
 const ToggleButton = styled.button`
   position: absolute;
   left: 392px;
@@ -167,6 +186,8 @@ const ToggleButton = styled.button`
  * @property {function} onFilterChange - A function to handle filter changes.
  * @property {string} infoBoxText - Any text to appear at the top of the sidebar in an info box.
  * @property {React.ReactNode} children - Additional React components or elements to be rendered within the sidebar.
+ * @property {boolean} [docked=false] - Render as a fixed column (docked map layout): no collapse toggle, no mobile bar, filters shown as plain sections.
+ * @property {string} [description] - Short page description shown under the title in the docked layout.
  * @returns {JSX.Element} The rendered Sidebar component.
  */
 export const Sidebar = ({
@@ -182,7 +203,9 @@ export const Sidebar = ({
   downloadShapefilePath,
   requestMethod,
   children,
-  setIsOpen
+  setIsOpen,
+  docked = false,
+  description
 }) => {
   const initialMobile = typeof window !== 'undefined' ? window.innerWidth <= 900 : false; //detect if the viewport is ≤ 900px on first render.
   const [isVisible, setIsVisible] = useState(!initialMobile); //Defaults to open on desktop (!initialMobile) and closed on mobile.
@@ -204,8 +227,8 @@ export const Sidebar = ({
   }, []);
 
   useEffect(() => {
-    setIsOpen(isVisible)
-  }, [isVisible]);
+    setIsOpen?.(docked || isVisible)
+  }, [isVisible, docked]);
 
   //Keeps isMobile in sync as the window changes size.
   useEffect(() => {
@@ -240,6 +263,47 @@ export const Sidebar = ({
     setIsVisible(!isVisible);
     setIsHovered(false); // Reset hover state when toggling
   };
+
+  if (docked) {
+    return (
+      <DockedSidebarContainer>
+        <SidebarHeader>
+          {pageName || "Visualisation Framework"}
+        </SidebarHeader>
+        {description && <DockedDescription>{description}</DockedDescription>}
+        {infoBoxText && <InfoBox text={infoBoxText} />}
+        {filters && Array.isArray(filters) && filters.length > 0 && (
+          <SelectorSection
+            filters={filters}
+            onFilterChange={onFilterChange}
+            bgColor={bgColor}
+            downloadPath={downloadPath}
+            downloadShapefilePath={downloadShapefilePath}
+            requestMethod={requestMethod || 'GET'}
+            plain
+          />
+        )}
+        {additionalFeatures?.download && (
+          <FilterProvider>
+            <DownloadSection
+              filters={additionalFeatures.download.filters}
+              downloadPath={additionalFeatures.download.downloadPath}
+              bgColor={bgColor}
+              requestMethod={additionalFeatures.download.requestMethod || 'GET'}
+            />
+          </FilterProvider>
+        )}
+        <TextSection title="About this visualisation" text={aboutVisualisationText} />
+        {additionalFeatures?.glossary && (
+          <AccordionSection title="Glossary">
+            <Glossary dataDictionary={additionalFeatures.glossary.dataDictionary} />
+          </AccordionSection>
+        )}
+        {children}
+        <TextSection title="Legal" text={legalText} />
+      </DockedSidebarContainer>
+    );
+  }
 
   return (
     <>

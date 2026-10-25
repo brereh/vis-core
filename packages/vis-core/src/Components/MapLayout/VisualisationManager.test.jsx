@@ -2,6 +2,7 @@ import { VisualisationManager } from "./VisualisationManager";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MapContext } from "contexts";
+import { DockedLayoutContext } from "contexts/DockedLayoutContext";
 
 jest.mock("maplibre-gl", () => ({
   Map: jest.fn(() => ({
@@ -135,6 +136,24 @@ describe("Test to render a CalloutVisualisationCard", () => {
       "data-show-on-mobile",
       "false"
     );
+  });
+
+  it("tells the docked layout whether any card is showing", async () => {
+    const setHasSelection = jest.fn();
+    render(
+      <DockedLayoutContext.Provider value={{ calloutSlot: null, setHasSelection }}>
+        <MapContext.Provider value={mockMapContext}>
+          <VisualisationManager {...props} />
+        </MapContext.Provider>
+      </DockedLayoutContext.Provider>
+    );
+    expect(setHasSelection).toHaveBeenLastCalledWith(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "visible: Test Card" }));
+    expect(setHasSelection).toHaveBeenLastCalledWith(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "hidden: Test Card" }));
+    expect(setHasSelection).toHaveBeenLastCalledWith(false);
   });
 
   it("moves a card to the top only the first time it becomes visible", async () => {

@@ -1,9 +1,11 @@
-import { Fragment, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import { Dimmer } from "Components/Dimmer";
 import { Sidebar } from "Components/Sidebar";
 import { DynamicStylingStatus } from "Components/DynamicStylingStatus/DynamicStylingStatus";
 import { PageContext } from "contexts/PageContext";
+import { AppContext } from "contexts/AppContext";
+import { DockedLayoutContext } from "contexts/DockedLayoutContext";
 import { ToastProvider } from "contexts/ToastContext";
 import { AccordionSection, MapLayerSection } from "Components/Sidebar/Accordion";
 import { useMapContext } from "hooks/useMapContext";
@@ -55,6 +57,74 @@ const MobileLegendSlot = styled.section`
   }
 `;
 
+// Narrower than this, the docked layout falls back to the overlay sidebar and cards.
+export const DOCKED_LAYOUT_MIN_WIDTH = 1100;
+const DOCKED_LAYOUT_QUERY = `(min-width: ${DOCKED_LAYOUT_MIN_WIDTH}px)`;
+const DEFAULT_DOCKED_PROMPT = "Click a feature on the map to see its summary";
+
+/**
+ * Tracks whether the viewport is wide enough for the docked layout.
+ * Assumes a wide viewport when matchMedia is unavailable.
+ *
+ * @param {boolean} enabled - Whether the page asked for the docked layout.
+ * @returns {boolean} True when the docked layout should render.
+ */
+const useDockedLayout = (enabled) => {
+  const getMatches = () =>
+    typeof window === "undefined" || typeof window.matchMedia !== "function"
+      ? true
+      : window.matchMedia(DOCKED_LAYOUT_QUERY).matches;
+  const [isWide, setIsWide] = useState(getMatches);
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+    const mql = window.matchMedia(DOCKED_LAYOUT_QUERY);
+    const onChange = () => setIsWide(mql.matches);
+    onChange();
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, [enabled]);
+
+  return enabled && isWide;
+};
+
+const DockedFiltersColumn = styled.aside`
+  flex: 0 0 420px;
+  height: 100%;
+  overflow: hidden;
+`;
+
+const DockedFeatureColumn = styled.aside`
+  flex: 0 0 460px;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--palette-white);
+  border-left: 1px solid var(--palette-mid-grey);
+`;
+
+const DockedPrompt = styled.p`
+  margin: 0;
+  color: var(--palette-grey);
+  font-size: 0.9rem;
+`;
+
+const VisuallyHidden = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`;
+
 /**
  * MapLayout component is the main layout component that composes the Map,
  * Sidebar, and MapLayerSection components. It serves as the container for
@@ -62,6 +132,11 @@ const MobileLegendSlot = styled.section`
  * The component uses the MapContext to manage the state of the map and its
  * layers, and it provides the necessary props to the Sidebar and MapLayerSection
  * components.
+ *
+ * Docked layout (opt-in): set `config.layout: "docked"` on the page, or
+ * `defaultMapLayout: "docked"` on the app config, to show the filters and the
+ * selected feature's callout cards as fixed columns either side of the map.
+ * See docs/Docked Map Layout.md.
  *
  * @component
  * @returns {JSX.Element} The rendered MapLayout component.
@@ -75,6 +150,18 @@ export const MapLayout = () => {
   const pageRef = useRef(pageContext);
   const layerZoomMessage = useLayerZoomMessage();
   const [sidebarIsOpen, setSidebarIsOpen] = useState(true);
+
+  const appContext = useContext(AppContext);
+  const requestedLayout = pageContext.config?.layout ?? appContext?.defaultMapLayout;
+  const isDocked = useDockedLayout(
+    requestedLayout === "docked" && pageContext.type === "MapLayout"
+  );
+  const [calloutSlot, setCalloutSlot] = useState(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const dockedContextValue = useMemo(
+    () => (isDocked ? { calloutSlot, setHasSelection } : null),
+    [isDocked, calloutSlot]
+  );
 
   // Domain-agnostic extension point: pages can supply extra sidebar sections via
   // config.additionalMapLayoutAccordionSections so apps can inject bespoke controls without
@@ -395,17 +482,8 @@ export const MapLayout = () => {
     "Applying colours and map styling...",
   ];
 
-  return (
-    <ToastProvider>
-      <LayoutContainer>
-      <Dimmer
-        dimmed={isLoading}
-        showLoader={true}
-        statusHeading={loadingHeading}
-        statusMessages={loadingMessages}
-      />
-      <DynamicStylingStatus isResolving={isDynamicStylingLoading} />
-      <Sidebar
+  const sidebarElement = (
+    <Sidebar
         pageName={pageContext.pageName}
         aboutVisualisationText={pageContext.about ?? loremIpsum}
         filters={state.filters}
@@ -418,6 +496,8 @@ export const MapLayout = () => {
         downloadShapefilePath={pageContext.config.downloadShapefilePath}
         requestMethod={pageContext.config.requestMethod}
         setIsOpen={setSidebarIsOpen}
+        docked={isDocked}
+        description={isDocked ? pageContext.description : undefined}
       >
         <MapLayerSection
           handleColorChange={handleColorChange}
@@ -445,11 +525,40 @@ export const MapLayout = () => {
           );
         })}
       </Sidebar>
+  );
+
+  return (
+    <ToastProvider>
+      <DockedLayoutContext.Provider value={dockedContextValue}>
+      <LayoutContainer>
+      <Dimmer
+        dimmed={isLoading}
+        showLoader={true}
+        statusHeading={loadingHeading}
+        statusMessages={loadingMessages}
+      />
+      <DynamicStylingStatus isResolving={isDynamicStylingLoading} />
+      {isDocked ? (
+        <DockedFiltersColumn aria-label="Filters">{sidebarElement}</DockedFiltersColumn>
+      ) : (
+        sidebarElement
+      )}
 
       {pageContext.type === "MapLayout" && (
         <MapContainer>
-          <Map extraCopyrightText={pageContext.extraCopyrightText ?? ""} sidebarIsOpen={sidebarIsOpen} showMapStyleToggle={false}/>
+          <Map extraCopyrightText={pageContext.extraCopyrightText ?? ""} sidebarIsOpen={sidebarIsOpen} showMapStyleToggle={false} resizeWithContainer={isDocked}/>
         </MapContainer>
+      )}
+      {isDocked && (
+        <DockedFeatureColumn aria-label="Selected feature">
+          <VisuallyHidden aria-live="polite" role="status">
+            {hasSelection ? "Selected feature summary updated" : ""}
+          </VisuallyHidden>
+          {!hasSelection && (
+            <DockedPrompt>{pageContext.config?.dockedPrompt ?? DEFAULT_DOCKED_PROMPT}</DockedPrompt>
+          )}
+          <div ref={setCalloutSlot} data-testid="docked-callout-slot" />
+        </DockedFeatureColumn>
       )}
       {pageContext.type === "DualMapLayout" && (
         <MapContainer>
@@ -462,6 +571,7 @@ export const MapLayout = () => {
       
         <MobileLegendSlot id="mobile-legend-slot" aria-label="Legend" />
       </LayoutContainer>
+      </DockedLayoutContext.Provider>
     </ToastProvider>
   );
 };
