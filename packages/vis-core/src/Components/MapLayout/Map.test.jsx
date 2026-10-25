@@ -62,6 +62,7 @@ jest.mock("maplibre-gl", () => {
 
 import maplibregl from "maplibre-gl";
 import Map from "./Map";
+import { DockedLayoutContext } from "contexts/DockedLayoutContext";
 import { ThemeProvider } from "styled-components";
 import { get } from "lodash";
 
@@ -435,6 +436,65 @@ describe("Hooks tests", () => {
     });
     expect(isMapReady).toBe(true);
     expect(screen.getByText("DynamicLegend")).toBeInTheDocument();
+  });
+});
+
+describe("Navigation control placement", () => {
+  const renderWithDocked = (docked, map) => {
+    useMap.mockReturnValue({ map, isMapReady: false });
+    const tree = (value) => (
+      <ThemeProvider theme={theme}>
+        <DockedLayoutContext.Provider value={value}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <MapContext.Provider value={mockMapContext}>
+              <Map {...props} />
+            </MapContext.Provider>
+          </FilterContext.Provider>
+        </DockedLayoutContext.Provider>
+      </ThemeProvider>
+    );
+    const dockedValue = { calloutSlot: null, setSelection: jest.fn() };
+    const utils = render(tree(docked ? dockedValue : null));
+    return { ...utils, rerenderDocked: (next) => utils.rerender(tree(next ? dockedValue : null)) };
+  };
+
+  const makeMap = () => ({
+    __nav: { id: "nav" },
+    addControl: jest.fn(),
+    removeControl: jest.fn(),
+    on: jest.fn(),
+    off: jest.fn(),
+    once: jest.fn(),
+    getLayer: jest.fn(),
+    getCanvas: jest.fn(() => ({ addEventListener: jest.fn(), removeEventListener: jest.fn(), style: {} })),
+    resize: jest.fn(),
+    getZoom: jest.fn(() => 10),
+  });
+
+  // The map also adds other controls (e.g. draw), so look only at the nav control's moves.
+  const lastNavPosition = (map) =>
+    map.addControl.mock.calls.filter(([control]) => control === map.__nav).at(-1)?.[1];
+
+  it("leaves the control bottom-left in the default layout", () => {
+    const map = makeMap();
+    renderWithDocked(false, map);
+
+    expect(map.removeControl).not.toHaveBeenCalled();
+    expect(map.addControl).not.toHaveBeenCalledWith(map.__nav, expect.anything());
+  });
+
+  it("moves the control top-left when docked and back when the layout falls back", () => {
+    const map = makeMap();
+    const { rerenderDocked } = renderWithDocked(true, map);
+
+    expect(map.removeControl).toHaveBeenCalledWith(map.__nav);
+    expect(lastNavPosition(map)).toBe("top-left");
+
+    rerenderDocked(false);
+    expect(lastNavPosition(map)).toBe("bottom-left");
+
+    rerenderDocked(true);
+    expect(lastNavPosition(map)).toBe("top-left");
   });
 });
 

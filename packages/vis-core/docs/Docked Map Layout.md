@@ -6,8 +6,8 @@ The docked layout replaces both with fixed columns:
 
 | Column | Width | Contents |
 | --- | --- | --- |
-| Left: filters (`<aside aria-label="Filters">`) | 420 px | Page title and description, then the filters as an always-open labelled section, then any download section. "About this visualisation", "Glossary", "Map layer control", any `additionalMapLayoutAccordionSections` and "Legal" stay as accordion entries underneath. There is no collapse toggle. |
-| Middle: map | The remaining width | The map and its legend (bottom left). MapLibre is resized whenever its container changes size, so the canvas is never clipped or offset. |
+| Left: filters (`<aside aria-label="Filters">`) | 420 px | Page title and description, then the filters as an always-open labelled section, then any download section. The teal map-click hints that `type: "map"` filters show in the overlay sidebar are left out, because the right-hand column's prompt already says the same; overlay and mobile layouts keep them. "About this visualisation", "Glossary", "Map layer control", any `additionalMapLayoutAccordionSections` and "Legal" stay as accordion entries underneath. There is no collapse toggle. |
+| Middle: map | The remaining width | The map, with its legend bottom-left and the zoom and compass control moved to the top-left so the two don't overlap (the default layout keeps the control bottom-left). The control moves back if the window narrows below the docked breakpoint. MapLibre is resized whenever its container changes size, so the canvas is never clipped or offset. |
 | Right: selected feature (`<aside aria-label="Selected feature">`) | 460 px | The callout cards for the selected feature, always open and full width, with no ">" toggle or slide animation. With nothing selected it shows the page's prompt text. |
 
 The docked layout is opt-in. With no `layout` set, pages render exactly as before.
