@@ -7,6 +7,7 @@ import { useTheme } from "styled-components";
 import { colorSchemes, colourBlindFriendlySchemes } from "utils";
 import { SelectorLabel } from "./SelectorLabel";
 import { makeSelectStyles } from "utils/selectStyles";
+import { useDockedSelectOptions } from "./useDockedSelectOptions";
 
 /**
  * Dropdown component for selecting color schemes.
@@ -21,6 +22,7 @@ export const ColourSchemeDropdown = ({
   layerName,
 }) => {
   const theme = useTheme();
+  const dockedSelectOptions = useDockedSelectOptions();
   const animatedComponents = makeAnimated();
   const { state } = useMapContext();
 
@@ -103,7 +105,7 @@ export const ColourSchemeDropdown = ({
         value={selectedOption}
         formatOptionLabel={formatOptionLabel}
         styles={useMemo(() => {
-          const base = makeSelectStyles(theme);
+          const base = makeSelectStyles(theme, dockedSelectOptions);
           return {
             ...base,
             option: (provided, state) => ({
@@ -118,7 +120,7 @@ export const ColourSchemeDropdown = ({
             }),
           };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [theme])}
+        }, [theme, dockedSelectOptions])}
         menuPlacement="auto"
         menuPortalTarget={document.body} // Use a portal to render the menu
         onChange={(selectedOption) => handleColorChange(selectedOption, layerName)}

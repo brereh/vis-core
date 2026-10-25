@@ -2181,7 +2181,7 @@ export const ChartRenderer = ({
     <ChartContainer $compact={compact}>
       {charts.map((chartCfg, idx) => {
         const cfg =
-          compact && chartCfg?.height == null
+          compact && chartCfg?.height == null && chartCfg?.barHeight == null
             ? { ...chartCfg, height: COMPACT_CHART_HEIGHT }
             : chartCfg;
         const type = (cfg.type || "").toLowerCase();

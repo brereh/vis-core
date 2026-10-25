@@ -104,8 +104,9 @@ const SidebarContainer = styled.div`
   `}`;
 
 // Docked layout: a static, full-height column with no overlay or collapse toggle,
-// and denser content than the overlay sidebar (14px text, 36px accordion rows,
-// 32px controls). Focus outlines are left to the controls' own styles.
+// and denser content than the overlay sidebar (14px text, 36px accordion rows).
+// Selects get 32px controls through useDockedSelectOptions. Focus outlines are
+// left to the controls' own styles.
 const DockedSidebarContainer = styled.div`
   height: 100%;
   padding: 12px;
@@ -128,11 +129,6 @@ const DockedSidebarContainer = styled.div`
     padding: 6px 10px;
     margin-top: 4px;
     font-size: 0.875rem;
-  }
-
-  /* react-select controls */
-  [class*="-control"] {
-    min-height: 32px;
   }
 `;
 

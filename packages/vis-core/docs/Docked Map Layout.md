@@ -57,8 +57,8 @@ Only `MapLayout` pages dock. `DualMapLayout` pages keep the overlay layout, and 
 
 The docked columns are denser than the overlay sidebar and cards. These sizes apply in the docked layout only; the overlay and mobile layouts are unchanged.
 
-- **Filters column:** 12 px padding; 14 px body text and labels; 18 px page title; 14 px description; 32 px dropdown controls; about 10 px between selectors; accordion rows ("About this visualisation", "Glossary", "Map layer control", "Legal") 36 px tall with 14 px text.
-- **Selected-feature column:** 12 px padding, cards full width with 12 px padding, 16 px card titles and 13–14 px body text. Charts without their own `height` are 200 px tall (`COMPACT_CHART_HEIGHT`) instead of 220–225 px, and their axis, unit and legend text is at least 11 px.
+- **Filters column:** 12 px padding; 14 px body text; 18 px page title; 14 px description; 32 px dropdown controls; accordion rows ("About this visualisation", "Glossary", "Map layer control", "Legal") 36 px tall with 14 px text. Selector labels (14 px) and the 10 px gap between selectors are the sidebar's existing sizes.
+- **Selected-feature column:** 12 px padding, and cards full width with 12 px padding. Card titles (16 px) and body text (about 13.6 px) keep the cards' existing sizes. Charts without their own `height` or `barHeight` are 200 px tall (`COMPACT_CHART_HEIGHT`) instead of 220–225 px, and their axis, unit and legend text is at least 11 px.
 - Colours come from the existing tokens (`--text-icon` for text), focus outlines are unchanged, and interactive targets stay at least 24×24 px.
 
 ## Smaller screens

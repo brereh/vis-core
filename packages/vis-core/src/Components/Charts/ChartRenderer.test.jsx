@@ -71,6 +71,18 @@ describe("ChartRenderer", () => {
       );
       expect(chartHeights(container)).toContain("260px");
     });
+
+    it("respects a chart's own barHeight", () => {
+      const { container } = render(
+        <ChartRenderer
+          compact
+          charts={[{ type: "bar", title: "Flow", barHeight: 400 }]}
+          data={[{ name: "A", value: 1 }, { name: "B", value: 2 }]}
+        />
+      );
+      expect(chartHeights(container)).toContain("400px");
+      expect(chartHeights(container)).not.toContain(`${COMPACT_CHART_HEIGHT}px`);
+    });
   });
 
   it("does not duplicate unit if already in the axis title", () => {
