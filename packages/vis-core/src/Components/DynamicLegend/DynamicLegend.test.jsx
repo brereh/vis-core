@@ -1,4 +1,5 @@
 import React from "react";
+import { DockedLayoutContext } from "contexts/DockedLayoutContext";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import { DynamicLegend } from "./DynamicLegend";
 import {
@@ -159,6 +160,47 @@ describe("DynamicLegend", () => {
     // Check that the legend container exists
     const legendContainer = screen.getByText("water-layer").closest("div");
     expect(legendContainer).toBeInTheDocument();
+  });
+
+  it.each([
+    ["default layout: bottom-right", null, { right: "10px", left: "" }],
+    ["docked layout: bottom-left", { calloutSlot: null, setSelection: jest.fn() }, { right: "auto", left: "10px" }],
+  ])("positions the legend for the %s", (_label, dockedValue, expected) => {
+    const mockMapWithGetStyle = {
+      ...mockMap,
+      on: jest.fn(),
+      getStyle: jest.fn(() => ({
+        layers: [
+          {
+            id: "water-layer",
+            type: "fill",
+            metadata: { isStylable: true },
+            paint: { "fill-color": "#00ffff" },
+          },
+        ],
+      })),
+    };
+    const mockState = { ...mockSetState, visualisations: {}, filters: [], layers: {}, currentZoom: 10 };
+
+    const { container } = render(
+      <DockedLayoutContext.Provider value={dockedValue}>
+        <MapContext.Provider value={{ state: mockState }}>
+          <AppContext.Provider value={{ defaultBands: [] }}>
+            <PageContext.Provider value={{ pageName: "test" }}>
+              <DynamicLegend map={mockMapWithGetStyle} />
+            </PageContext.Provider>
+          </AppContext.Provider>
+        </MapContext.Provider>
+      </DockedLayoutContext.Provider>
+    );
+    act(() => {
+      mockMapWithGetStyle.on.mock.calls.find((call) => call[0] === "styledata")[1]();
+    });
+
+    const legend = window.getComputedStyle(container.firstChild);
+    expect(legend.bottom).toBe("40px");
+    expect(legend.right).toBe(expected.right);
+    expect(legend.left).toBe(expected.left);
   });
 
   it("does not render layers with shouldShowInLegend = false", () => {

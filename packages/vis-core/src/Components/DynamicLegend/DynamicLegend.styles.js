@@ -83,6 +83,12 @@ export const LegendContainer = styled.div`
     gap: 0 10px;
   }
 
+  /* Docked map layout: bottom-left of the map area. */
+  ${({ $docked }) => $docked && `
+    left: 10px;
+    right: auto;
+  `}
+
   ${({ $outside }) => $outside && `
     position: static;
     display: block;

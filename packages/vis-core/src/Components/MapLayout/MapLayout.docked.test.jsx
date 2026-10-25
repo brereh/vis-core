@@ -19,9 +19,11 @@ jest.mock("./Map", () => {
   const { ScrollableContainer } = jest.requireActual(
     "Components/ScrollableContainer/ScrollableContainer"
   );
-  // Swallows the props ScrollableContainer adds to each card.
-  const ZoneSummaryCard = () => (
-    <section aria-label="Zone summary">Zone summary card</section>
+  // Swallows the props ScrollableContainer adds to each card, except `docked`.
+  const ZoneSummaryCard = ({ docked }) => (
+    <section aria-label="Zone summary" data-docked={String(!!docked)}>
+      Zone summary card
+    </section>
   );
   return {
     __esModule: true,
@@ -111,6 +113,18 @@ describe("MapLayout docked layout", () => {
     );
     expect(within(screen.getByTestId("map")).queryByText("Zone summary card")).not.toBeInTheDocument();
     expect(within(column).getByRole("status")).toHaveAttribute("aria-live", "polite");
+    // Cards are told to fill the column instead of keeping the overlay width.
+    expect(within(column).getByRole("region", { name: "Zone summary" })).toHaveAttribute("data-docked", "true");
+  });
+
+  // jsdom can't compute contrast for jest-axe, so pin the text to the body text token.
+  it("uses the body text colour for the description and prompt", () => {
+    renderLayout({ config: { layout: "docked" } });
+
+    expect(window.getComputedStyle(screen.getByText("Counts at permanent sites.")).color).toBe("var(--text-icon)");
+    expect(
+      window.getComputedStyle(screen.getByText("Click a feature on the map to see its summary")).color
+    ).toBe("var(--text-icon)");
   });
 
   it("shows the page prompt while nothing is selected", () => {
@@ -149,6 +163,7 @@ describe("MapLayout docked layout", () => {
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("map")).getByText("Zone summary card")).toBeInTheDocument();
     expect(screen.getByText("Filters", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Zone summary" })).toHaveAttribute("data-docked", "false");
   });
 
   it("has no automated accessibility violations", async () => {

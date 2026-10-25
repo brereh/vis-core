@@ -42,6 +42,11 @@ const ParentContainer = styled.div`
   @media ${(props) => props.theme.mq.mobile} {
     width: 100%;
   }
+
+  /* Docked map layout: fill the "Selected feature" column. */
+  ${({ $docked }) => $docked && `
+    width: 100%;
+  `}
 `;
 
 /**
@@ -73,6 +78,14 @@ const CardContainer = styled.div`
     box-shadow: none;
     flex-shrink: 1;
   }
+
+  ${({ $docked }) => $docked && `
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 1;
+    box-shadow: none;
+    border: 1px solid var(--palette-mid-grey);
+  `}
 `;
 
 const CardHeader = styled.div`
@@ -363,6 +376,7 @@ const safeStringify = (value) => {
  * @param {boolean} props.isLoading- Whether this is the initial loading state.
  * @param {boolean} props.isUpdating - Whether data is refreshing after first hydration.
  * @param {boolean} [props.hideHandleOnMobile]
+ * @param {boolean} [props.docked=false] - Fill the docked layout's "Selected feature" column.
  * @param {Function} [props.onVisibilityChange] - Callback fired when real card data becomes renderable or hidden.
  * @param {React.ReactNode} [props.recordSelector]
  * @param {Function} [props.toggleVisibility]
@@ -380,6 +394,7 @@ export const CalloutCardVisualisation = ({
   isLoading,
   isUpdating = false,
   hideHandleOnMobile = false,
+  docked = false,
   onVisibilityChange,
   recordSelector = null,
   toggleVisibility: externalToggleVisibility = null,
@@ -809,11 +824,12 @@ export const CalloutCardVisualisation = ({
   if (isLoading) {
     return (
       <ParentContainer
+        $docked={docked}
         $isVisible={isVisible}
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-        <CardContainer $isVisible={isVisible}>
+        <CardContainer $isVisible={isVisible} $docked={docked}>
           {renderCardHeader("Loading...", { showStatus: false })}
           <CardContent>
             <h3>Loading...</h3>
@@ -832,11 +848,12 @@ export const CalloutCardVisualisation = ({
   if (visualisation.layout && visualisation.layout.length > 0) {
     return (
       <ParentContainer
+        $docked={docked}
         $isVisible={isVisible}
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-        <CardContainer $isVisible={isVisible}>
+        <CardContainer $isVisible={isVisible} $docked={docked}>
           {renderCardHeader(cardName)}
 
           {recordSelector}
@@ -1018,11 +1035,12 @@ export const CalloutCardVisualisation = ({
   // Render the card with dynamic content
   return (
     <ParentContainer
+        $docked={docked}
         $isVisible={isVisible}
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-      <CardContainer $isVisible={isVisible}>
+      <CardContainer $isVisible={isVisible} $docked={docked}>
         {renderCardHeader(cardName)}
 
         {recordSelector}
