@@ -9,6 +9,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { AccordionIcon } from "Components/Sidebar/Accordion/AccordionSection";
 import { MobileBar } from "Components/MobileBar/MobileBar";
+import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 
 import { CARD_CONSTANTS, defaultBgColour } from "defaults";
 
@@ -80,6 +81,28 @@ const StyledScrollableContainer = styled.div`
     & > * {
       width: 100% !important;
     }
+  }
+`;
+
+/**
+ * Docked layout: cards stack full width inside the fixed right-hand column,
+ * always open, with no slide-over handle.
+ */
+const DockedStack = styled.div`
+  display: ${({ $hidden }) => ($hidden ? "none" : "flex")};
+  flex-direction: column;
+  gap: ${PADDING}px;
+  width: 100%;
+
+  & > *,
+  & [data-callout-card-name] > :first-child {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  & [data-callout-card-name] > :first-child {
+    box-shadow: none;
+    border: 1px solid var(--palette-mid-grey);
   }
 `;
 
@@ -244,6 +267,7 @@ export const ScrollableContainer = ({
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [open, setOpen] = useState(!initialIsMobile);
   const [mobilePortalSlot, setMobilePortalSlot] = useState(null);
+  const dockedSlot = useDockedLayoutContext()?.calloutSlot ?? null;
 
   useEffect(() => {
     if (!isMobile) {
@@ -746,6 +770,20 @@ export const ScrollableContainer = ({
       );
     }
     return null;
+  }
+
+  if (dockedSlot) {
+    return createPortal(
+      <DockedStack
+        ref={scrollRef}
+        $hidden={hidden}
+        data-testid="container"
+        className="selectable-text"
+      >
+        {renderChildren(true)}
+      </DockedStack>,
+      dockedSlot
+    );
   }
 
   return (

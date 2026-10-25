@@ -2,6 +2,7 @@ import { VisualisationManager } from "./VisualisationManager";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MapContext } from "contexts";
+import { DockedLayoutContext } from "contexts/DockedLayoutContext";
 
 jest.mock("maplibre-gl", () => ({
   Map: jest.fn(() => ({
@@ -135,6 +136,44 @@ describe("Test to render a CalloutVisualisationCard", () => {
       "data-show-on-mobile",
       "false"
     );
+  });
+
+  it("tells the docked layout which feature is showing", async () => {
+    const setSelection = jest.fn();
+    const dockedProps = {
+      ...props,
+      visualisationConfigs: {
+        ...props.visualisationConfigs,
+        calloutCard: {
+          ...props.visualisationConfigs.calloutCard,
+          pathParams: { id: { value: "Site 42" } },
+        },
+      },
+    };
+    const { unmount } = render(
+      <DockedLayoutContext.Provider value={{ calloutSlot: null, setSelection }}>
+        <MapContext.Provider value={mockMapContext}>
+          <VisualisationManager {...dockedProps} />
+        </MapContext.Provider>
+      </DockedLayoutContext.Provider>
+    );
+    expect(setSelection).toHaveBeenLastCalledWith({ hasSelection: false, announcement: "" });
+
+    await userEvent.click(screen.getByRole("button", { name: "visible: Test Card" }));
+    expect(setSelection).toHaveBeenLastCalledWith({
+      hasSelection: true,
+      announcement: "Showing Test Card for Site 42",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "hidden: Test Card" }));
+    expect(setSelection).toHaveBeenLastCalledWith({
+      hasSelection: false,
+      announcement: "Selection cleared",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "visible: Test Card" }));
+    unmount();
+    expect(setSelection).toHaveBeenLastCalledWith({ hasSelection: false, announcement: "" });
   });
 
   it("moves a card to the top only the first time it becomes visible", async () => {

@@ -10,7 +10,7 @@ import { Slider } from "./Slider";
 import { Toggle } from "./Toggle";
 import { AppContext } from "contexts/AppContext";
 import { useToast } from "contexts/ToastContext";
-import { useState, useContext, useEffect, useCallback, useRef } from "react";
+import { useState, useContext, useEffect, useCallback, useRef, useId } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { MapFeatureSelect, MapFeatureSelectWithControls } from "./MapFeatureSelect";
 import { CheckboxSelector } from './CheckboxSelector';
@@ -101,13 +101,43 @@ const WarningStatus = ({ message }) => {
   );
 };
 
+const PlainSectionHeading = styled.h3`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding-left: 5px;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-icon);
+`;
+
+/**
+ * Always-open alternative to AccordionSection, used by the docked map layout.
+ */
+const PlainSection = ({ title, statusNode, children }) => {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="selectable-text">
+      <PlainSectionHeading id={headingId}>
+        {title}
+        {statusNode}
+      </PlainSectionHeading>
+      {children}
+    </section>
+  );
+};
+
 /**
  * Renders a section containing filter selectors for filtering and data selection.
  * @property {Object[]} filters - An array of filter objects containing information about the filters to be rendered.
  * @property {Function} onFilterChange - The function called when a filter value changes.
+ * @property {boolean} [plain=false] - Render as an always-open labelled section instead of an accordion (docked map layout).
  * @returns {JSX.Element} The rendered SelectorSection component.
  */
-export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath, downloadShapefilePath, requestMethod = 'GET' }) => {
+export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath, downloadShapefilePath, requestMethod = 'GET', plain = false }) => {
   const appContext = useContext(AppContext);
   const { state: mapState } = useMapContext();
   const { state: filterState, dispatch: filterDispatch } = useFilterContext();
@@ -292,8 +322,10 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
     ? <WarningStatus message={noDataMessage} /> 
     : null;
 
+  const SectionWrapper = plain ? PlainSection : AccordionSection;
+
   return (
-    <AccordionSection 
+    <SectionWrapper 
       title="Filtering and data selection" 
       defaultValue={true}
       statusNode={statusNode}
@@ -466,6 +498,6 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
       ) : (
         <NoDataParagraph>Loading filters...</NoDataParagraph>
       )}
-    </AccordionSection>
+    </SectionWrapper>
   );
 };
