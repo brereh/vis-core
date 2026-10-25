@@ -7,7 +7,11 @@ import { createContext, useContext } from "react";
  * Outside a docked layout the value is `null`, so consumers keep their default
  * (overlay) behaviour.
  *
- * Shape when docked: { calloutSlot: HTMLElement|null, setHasSelection: (boolean) => void }
+ * Shape when docked:
+ * {
+ *   calloutSlot: HTMLElement|null,
+ *   setSelection: ({ hasSelection: boolean, announcement: string }) => void,
+ * }
  */
 export const DockedLayoutContext = createContext(null);
 

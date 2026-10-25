@@ -153,13 +153,19 @@ export const MapLayout = () => {
 
   const appContext = useContext(AppContext);
   const requestedLayout = pageContext.config?.layout ?? appContext?.defaultMapLayout;
+  // Fullscreen callout cards position themselves over the whole map, so they
+  // can't live in the docked column: such pages keep the overlay layout.
+  const hasFullscreenCard = Object.values(state.visualisations ?? {}).some(
+    (visualisation) =>
+      visualisation?.type === "calloutCard" && visualisation.cardType === "fullscreen"
+  );
   const isDocked = useDockedLayout(
-    requestedLayout === "docked" && pageContext.type === "MapLayout"
+    requestedLayout === "docked" && pageContext.type === "MapLayout" && !hasFullscreenCard
   );
   const [calloutSlot, setCalloutSlot] = useState(null);
-  const [hasSelection, setHasSelection] = useState(false);
+  const [selection, setSelection] = useState({ hasSelection: false, announcement: "" });
   const dockedContextValue = useMemo(
-    () => (isDocked ? { calloutSlot, setHasSelection } : null),
+    () => (isDocked ? { calloutSlot, setSelection } : null),
     [isDocked, calloutSlot]
   );
 
@@ -552,9 +558,9 @@ export const MapLayout = () => {
       {isDocked && (
         <DockedFeatureColumn aria-label="Selected feature">
           <VisuallyHidden aria-live="polite" role="status">
-            {hasSelection ? "Selected feature summary updated" : ""}
+            {selection.announcement}
           </VisuallyHidden>
-          {!hasSelection && (
+          {!selection.hasSelection && (
             <DockedPrompt>{pageContext.config?.dockedPrompt ?? DEFAULT_DOCKED_PROMPT}</DockedPrompt>
           )}
           <div ref={setCalloutSlot} data-testid="docked-callout-slot" />

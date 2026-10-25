@@ -9,6 +9,21 @@ import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 const UPDATE_MARKER_TIMEOUT_MS = 2800;
 
 /**
+ * Reads the selected feature's id from a callout card's path params
+ * (`id` when present, otherwise the first param with a value).
+ *
+ * @param {Object} config - Callout card visualisation config.
+ * @returns {string|number|null} The selected feature id, if any.
+ */
+const getSelectedFeatureId = (config) => {
+  const pathParams = config?.pathParams ?? {};
+  const param =
+    pathParams.id ??
+    Object.values(pathParams).find((p) => p?.value != null);
+  return param?.value ?? null;
+};
+
+/**
  * VisualisationManager component that renders the appropriate visualizations
  * based on the types specified in the visualisation configurations.
  *
@@ -155,11 +170,33 @@ export const VisualisationManager = ({
   const showOnMobile = calloutCardVisualisations.length > 0;
 
   // Docked layout: tell the right-hand column whether any card has content, so it
-  // can swap between the cards and the page's prompt text.
-  const setDockedHasSelection = useDockedLayoutContext()?.setHasSelection;
+  // can swap between the cards and the page's prompt text, and what to announce.
+  const setDockedSelection = useDockedLayoutContext()?.setSelection;
+  const hadDockedSelectionRef = useRef(false);
+
   useEffect(() => {
-    setDockedHasSelection?.(visibleCount > 0);
-  }, [setDockedHasSelection, visibleCount]);
+    if (!setDockedSelection) return;
+    const hasSelection = visibleCount > 0;
+    const shown = cardOrder
+      .filter((name) => visibleMapRef.current[name])
+      .map((name) => {
+        const config = calloutCardConfigByName[name] ?? {};
+        const featureId = getSelectedFeatureId(config);
+        const label = config.cardName || name;
+        return featureId != null ? `${label} for ${featureId}` : label;
+      });
+    let announcement = "";
+    if (hasSelection) announcement = `Showing ${shown.join(", ")}`;
+    else if (hadDockedSelectionRef.current) announcement = "Selection cleared";
+    hadDockedSelectionRef.current = hasSelection;
+    setDockedSelection({ hasSelection, announcement });
+  }, [setDockedSelection, visibleCount, cardOrder, visualisationConfigs]);
+
+  // Don't leave the docked column hiding its prompt after this manager unmounts.
+  useEffect(
+    () => () => setDockedSelection?.({ hasSelection: false, announcement: "" }),
+    [setDockedSelection]
+  );
 
   /**
    * Keeps card order, visibility, first-visible tracking, and update markers in

@@ -138,22 +138,42 @@ describe("Test to render a CalloutVisualisationCard", () => {
     );
   });
 
-  it("tells the docked layout whether any card is showing", async () => {
-    const setHasSelection = jest.fn();
-    render(
-      <DockedLayoutContext.Provider value={{ calloutSlot: null, setHasSelection }}>
+  it("tells the docked layout which feature is showing", async () => {
+    const setSelection = jest.fn();
+    const dockedProps = {
+      ...props,
+      visualisationConfigs: {
+        ...props.visualisationConfigs,
+        calloutCard: {
+          ...props.visualisationConfigs.calloutCard,
+          pathParams: { id: { value: "Site 42" } },
+        },
+      },
+    };
+    const { unmount } = render(
+      <DockedLayoutContext.Provider value={{ calloutSlot: null, setSelection }}>
         <MapContext.Provider value={mockMapContext}>
-          <VisualisationManager {...props} />
+          <VisualisationManager {...dockedProps} />
         </MapContext.Provider>
       </DockedLayoutContext.Provider>
     );
-    expect(setHasSelection).toHaveBeenLastCalledWith(false);
+    expect(setSelection).toHaveBeenLastCalledWith({ hasSelection: false, announcement: "" });
 
     await userEvent.click(screen.getByRole("button", { name: "visible: Test Card" }));
-    expect(setHasSelection).toHaveBeenLastCalledWith(true);
+    expect(setSelection).toHaveBeenLastCalledWith({
+      hasSelection: true,
+      announcement: "Showing Test Card for Site 42",
+    });
 
     await userEvent.click(screen.getByRole("button", { name: "hidden: Test Card" }));
-    expect(setHasSelection).toHaveBeenLastCalledWith(false);
+    expect(setSelection).toHaveBeenLastCalledWith({
+      hasSelection: false,
+      announcement: "Selection cleared",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "visible: Test Card" }));
+    unmount();
+    expect(setSelection).toHaveBeenLastCalledWith({ hasSelection: false, announcement: "" });
   });
 
   it("moves a card to the top only the first time it becomes visible", async () => {

@@ -116,7 +116,11 @@ const Map = (props) => {
     if (typeof ResizeObserver === "undefined" || !mapContainerRef.current) return undefined;
     const observer = new ResizeObserver(() => map.resize?.());
     observer.observe(mapContainerRef.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      // Leaving the docked layout widens the container once React commits; resize after that.
+      requestAnimationFrame(() => map.resize?.());
+    };
   }, [map, props.resizeWithContainer]);
   
   /**

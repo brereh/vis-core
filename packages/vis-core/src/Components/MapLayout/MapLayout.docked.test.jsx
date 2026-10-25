@@ -47,7 +47,7 @@ const mapState = {
   pageIsReady: false,
 };
 
-const renderLayout = ({ config = {}, appContext = {} } = {}) => {
+const renderLayout = ({ config = {}, appContext = {}, visualisations = {} } = {}) => {
   const pageContext = {
     type: "MapLayout",
     pageName: "Traffic counts",
@@ -61,7 +61,7 @@ const renderLayout = ({ config = {}, appContext = {} } = {}) => {
       <AppContext.Provider value={{ appPages: [], ...appContext }}>
         <PageContext.Provider value={pageContext}>
           <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
-            <MapContext.Provider value={{ state: mapState, dispatch: jest.fn() }}>
+            <MapContext.Provider value={{ state: { ...mapState, visualisations }, dispatch: jest.fn() }}>
               <MapLayout />
             </MapContext.Provider>
           </FilterContext.Provider>
@@ -128,6 +128,16 @@ describe("MapLayout docked layout", () => {
   it("falls back to the overlay layout on narrow screens", () => {
     mockMatchMedia(false);
     renderLayout({ config: { layout: "docked" } });
+
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+    expect(screen.getByTestId("map")).toHaveAttribute("data-resize-with-container", "false");
+  });
+
+  it("keeps the overlay layout when a callout card is fullscreen", () => {
+    renderLayout({
+      config: { layout: "docked" },
+      visualisations: { Detail: { type: "calloutCard", cardType: "fullscreen" } },
+    });
 
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     expect(screen.getByTestId("map")).toHaveAttribute("data-resize-with-container", "false");

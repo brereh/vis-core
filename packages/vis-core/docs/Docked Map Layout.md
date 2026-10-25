@@ -47,7 +47,7 @@ const appConfig = {
 | `dockedPrompt` | page `config` | `"Click a feature on the map to see its summary"` | Text in the right-hand column while nothing is selected. |
 | `description` | page (next to `pageName`) | unset | Short description under the title in the left-hand column. |
 
-Only `MapLayout` pages dock. `DualMapLayout` pages keep the overlay layout.
+Only `MapLayout` pages dock. `DualMapLayout` pages keep the overlay layout, and so do pages with any `cardType: "fullscreen"` callout card, because that card covers the whole map area and can't sit inside the right-hand column.
 
 ## Smaller screens
 
@@ -56,7 +56,7 @@ The docked layout applies at viewport widths of 1100 px and above (`DOCKED_LAYOU
 ## Accessibility
 
 - Both columns are `aside` landmarks, labelled "Filters" and "Selected feature".
-- When a feature's summary appears in the right-hand column, a polite live region (`role="status"`, `aria-live="polite"`) announces it. Focus stays on the map, so keyboard users can keep exploring it.
+- A polite live region (`role="status"`, `aria-live="polite"`) in the right-hand column announces what it shows: the card name and the selected feature's id from the card's path params (for example "Showing Site summary for 1234"), again whenever the selection changes, and "Selection cleared" when it empties. Focus stays on the map, so keyboard users can keep exploring it.
 - `MapLayout.docked.test.jsx` includes a jest-axe check of the docked layout.
 
 ## Styling
