@@ -1,3 +1,4 @@
+import { CARD_CONSTANTS } from "defaults";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { CalloutCardVisualisation } from "./CalloutCardVisualisation";
 import { MapContext } from "contexts/MapContext";
@@ -110,6 +111,26 @@ describe("Tests when useFetchVisualisationData return valid values", () => {
     await waitFor(() => {
       expect(screen.getByText("ChevronLeft")).toBeInTheDocument();
     });
+  });
+
+  it.each([
+    [false, `${CARD_CONSTANTS.CARD_WIDTH}px`],
+    [true, "100%"],
+  ])("sizes the card for docked=%s", async (docked, expectedWidth) => {
+    const { container } = render(
+      <ThemeProvider theme={theme}>
+        <MapContext.Provider value={mockMapContext}>
+          <CalloutCardVisualisation {...props} docked={docked} />
+        </MapContext.Provider>
+      </ThemeProvider>
+    );
+    const parent = await waitFor(() => {
+      const el = container.querySelector("[data-callout-card-name]");
+      expect(el).not.toBeNull();
+      return el;
+    });
+    expect(window.getComputedStyle(parent.firstChild).width).toBe(expectedWidth);
+    if (docked) expect(window.getComputedStyle(parent).width).toBe("100%");
   });
 
   it("Function onUpdate have been called", () => {

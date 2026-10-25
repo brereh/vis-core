@@ -119,7 +119,7 @@ const DockedDescription = styled.p`
   margin: 0 0 12px;
   padding-left: 5px;
   font-size: 0.9rem;
-  color: var(--palette-grey);
+  color: var(--text-icon);
 `;
 
 const ToggleButton = styled.button`

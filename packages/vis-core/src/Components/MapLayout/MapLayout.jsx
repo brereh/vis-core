@@ -109,7 +109,7 @@ const DockedFeatureColumn = styled.aside`
 
 const DockedPrompt = styled.p`
   margin: 0;
-  color: var(--palette-grey);
+  color: var(--text-icon);
   font-size: 0.9rem;
 `;
 

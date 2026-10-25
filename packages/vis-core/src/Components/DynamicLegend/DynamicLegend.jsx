@@ -12,6 +12,7 @@ import { useFetchVisualisationData } from "hooks/useFetchVisualisationData";
 import { useIsMobile } from "hooks/useIsMobile";
 import { PageContext } from "contexts/PageContext";
 import { useAppContext } from "contexts/AppContext";
+import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 import { LegendContainer } from "./DynamicLegend.styles";
 import {
   interpolateWidths,
@@ -37,6 +38,7 @@ import LegendLayerGroup from "./LegendLayerGroup";
  */
 export const DynamicLegend = ({ map }) => {
   const isMobile = useIsMobile();
+  const isDocked = useDockedLayoutContext() != null;
   const [legendItems, setLegendItems] = useState([]);
   const { state } = useMapContext();
   const { defaultBands, defaultLegendDisplayMode = 'continuous' } = useAppContext();
@@ -437,7 +439,7 @@ export const DynamicLegend = ({ map }) => {
   }
 
   const content = (
-    <LegendContainer ref={legendRef} $outside={isMobile}>
+    <LegendContainer ref={legendRef} $outside={isMobile} $docked={isDocked}>
       {legendItems.map((item, index) => (
         <LegendLayerGroup
           key={item.layerId}

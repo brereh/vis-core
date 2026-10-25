@@ -86,24 +86,14 @@ const StyledScrollableContainer = styled.div`
 
 /**
  * Docked layout: cards stack full width inside the fixed right-hand column,
- * always open, with no slide-over handle.
+ * always open, with no slide-over handle. Cards size themselves from the
+ * `docked` prop passed in renderDockedChildren.
  */
 const DockedStack = styled.div`
   display: ${({ $hidden }) => ($hidden ? "none" : "flex")};
   flex-direction: column;
   gap: ${PADDING}px;
   width: 100%;
-
-  & > *,
-  & [data-callout-card-name] > :first-child {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  & [data-callout-card-name] > :first-child {
-    box-shadow: none;
-    border: 1px solid var(--palette-mid-grey);
-  }
 `;
 
 /**
@@ -780,7 +770,11 @@ export const ScrollableContainer = ({
         data-testid="container"
         className="selectable-text"
       >
-        {renderChildren(true)}
+        {React.Children.map(children, (child) =>
+          React.isValidElement(child)
+            ? React.cloneElement(child, { hideHandleOnMobile: true, docked: true })
+            : child
+        )}
       </DockedStack>,
       dockedSlot
     );

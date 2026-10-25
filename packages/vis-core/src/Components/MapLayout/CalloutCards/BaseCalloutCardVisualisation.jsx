@@ -36,6 +36,7 @@ import { api } from "services";
  * @param {Function} [props.onCardUpdated] - Callback fired when hydrated card data changes.
  * @param {Function} [props.onCardUpdateAcknowledged] - Callback fired when the user opens an updated card.
  * @param {boolean} [props.hideHandleOnMobile] - Hide the desktop card toggle in mobile stacked layout.
+ * @param {boolean} [props.docked] - Render full width in the docked layout's "Selected feature" column.
  * @param {string} [props.locationFilterId] - Optional explicit filter id to drive navigation
  * @param {Function} [props.getAllColors]
  *
@@ -51,6 +52,7 @@ export const BaseCalloutCardVisualisation = ({
   onCardUpdated,
   onCardUpdateAcknowledged,
   hideHandleOnMobile,
+  docked,
   locationFilterId,
   getAllColors,
   ...props
@@ -419,6 +421,7 @@ export const BaseCalloutCardVisualisation = ({
       isLoading={showInitialLoading}
       isUpdating={showUpdating}
       hideHandleOnMobile={hideHandleOnMobile}
+      docked={docked}
       getAllColors={getAllColors ?? injectedGetAllColors}
       recordSelector={
         hasMultipleRecords ? (
