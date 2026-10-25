@@ -5,6 +5,7 @@ import Select from "react-select";
 import makeAnimated from "react-select/animated";
 import { useTheme } from "styled-components";
 import { makeSelectStyles } from "utils/selectStyles";
+import { useDockedSelectOptions } from "./useDockedSelectOptions";
 
 const StyledDropdown = styled.select`
   width: 100%;
@@ -27,7 +28,8 @@ export const ClassificationDropdown = ({
   classification,
 }) => {
   const theme = useTheme();
-  const selectStyles = useMemo(() => makeSelectStyles(theme), [theme]);
+  const dockedSelectOptions = useDockedSelectOptions();
+  const selectStyles = useMemo(() => makeSelectStyles(theme, dockedSelectOptions), [theme, dockedSelectOptions]);
   const animatedComponents = makeAnimated();
   const options = useMemo(
     () =>

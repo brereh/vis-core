@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
   ResponsiveContainer,
@@ -86,6 +86,20 @@ const ChartContainer = styled.div`
   gap: 8px;
   margin-top: 4px;
   font-family: var(--font-sans);
+
+  /* Compact (docked layout): smaller charts, but axis and legend text stay at
+     11px or more so they remain readable. CSS outranks SVG font-size attributes. */
+  ${({ $compact }) => $compact && `
+    .recharts-cartesian-axis-tick text,
+    .recharts-label {
+      font-size: ${COMPACT_CHART_MIN_FONT_SIZE}px;
+    }
+
+    .recharts-legend-item,
+    .recharts-legend-item-text {
+      font-size: ${COMPACT_CHART_MIN_FONT_SIZE}px !important;
+    }
+  `}
 `;
 
 const VisuallyHidden = styled.div`
@@ -215,6 +229,13 @@ const RotatingIcon = styled(FaChevronDown)`
  * Centralized chart configuration defaults
  * @constant {Object}
  */
+// Compact charts (docked layout): default height and minimum text size.
+export const COMPACT_CHART_HEIGHT = 200;
+export const COMPACT_CHART_MIN_FONT_SIZE = 11;
+
+// Tells chart sections whether they render compact, for sizes set inline.
+const ChartCompactContext = createContext(false);
+
 const DEFAULTS = {
   DIMENSIONS: {
     baseHeight: 220,
@@ -529,6 +550,8 @@ const ChartSection = ({
   descriptionId,
   children,
 }) => {
+  const compact = useContext(ChartCompactContext);
+  const unitFontSize = compact ? `${COMPACT_CHART_MIN_FONT_SIZE}px` : "10px";
   const yAxisObj =
     typeof yAxisTitle === "object" && yAxisTitle !== null
       ? yAxisTitle
@@ -573,7 +596,7 @@ const ChartSection = ({
             >
               <span>{yAxisObj.title}</span>
               {yAxisObj.unit && (
-                <span style={{ fontSize: "10px", opacity: 0.85 }}>
+                <span style={{ fontSize: unitFontSize, opacity: 0.85 }}>
                   {yAxisObj.unit}
                 </span>
               )}
@@ -607,7 +630,7 @@ const ChartSection = ({
             >
               <span>{rightYAxisObj.title}</span>
               {rightYAxisObj.unit && (
-                <span style={{ fontSize: "10px", opacity: 0.85 }}>
+                <span style={{ fontSize: unitFontSize, opacity: 0.85 }}>
                   {rightYAxisObj.unit}
                 </span>
               )}
@@ -625,7 +648,7 @@ const ChartSection = ({
         >
           <span>{xAxisObj.title}</span>
           {xAxisObj.unit && (
-            <span style={{ display: "block", fontSize: "10px", opacity: 0.85 }}>
+            <span style={{ display: "block", fontSize: unitFontSize, opacity: 0.85 }}>
               {xAxisObj.unit}
             </span>
           )}
@@ -2113,6 +2136,8 @@ const RankingChart = ({ config, data, formatters, chartUiColors, onRowClick }) =
  * @param {Object} props.data - Data object containing values to chart
  * @param {Object} props.formatters - Custom formatting functions for values
  * @param {number} props.barHeight - Optional height override for bar charts
+ * @param {boolean} [props.compact=false] - Denser charts for the docked layout: charts without
+ *   their own `height` default to COMPACT_CHART_HEIGHT, and axis/legend text is at least 11px.
  * @returns {JSX.Element|null} - Rendered charts or null if no charts provided
  */
 export const ChartRenderer = ({
@@ -2121,6 +2146,7 @@ export const ChartRenderer = ({
   formatters = {},
   barHeight,
   onRowClick,
+  compact = false,
 }) => {
   const theme = useTheme();
   const brandColor = theme?.primary || defaultBgColour;
@@ -2151,8 +2177,13 @@ export const ChartRenderer = ({
   if (!hasAny) return null;
 
   return (
-    <ChartContainer>
-      {charts.map((cfg, idx) => {
+    <ChartCompactContext.Provider value={compact}>
+    <ChartContainer $compact={compact}>
+      {charts.map((chartCfg, idx) => {
+        const cfg =
+          compact && chartCfg?.height == null && chartCfg?.barHeight == null
+            ? { ...chartCfg, height: COMPACT_CHART_HEIGHT }
+            : chartCfg;
         const type = (cfg.type || "").toLowerCase();
         const resolvedBarChartHeight = cfg?.height ?? cfg?.barHeight ?? barHeight;
         const cfgWithResolvedHeight =
@@ -2305,6 +2336,7 @@ export const ChartRenderer = ({
         }
       })}
     </ChartContainer>
+    </ChartCompactContext.Provider>
   );
 };
 

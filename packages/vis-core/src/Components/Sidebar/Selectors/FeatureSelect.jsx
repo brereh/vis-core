@@ -3,6 +3,7 @@ import Select, { components } from 'react-select';
 import styled, { useTheme } from 'styled-components';
 import { useLayerFeatureMetadata } from 'hooks/useLayerFeatureMetadata';
 import { makeSelectStyles, selectComponents } from 'utils/selectStyles';
+import { useDockedSelectOptions } from "./useDockedSelectOptions";
 
 // Styled components
 const Container = styled.div`
@@ -43,8 +44,9 @@ export const CustomValueContainer = ({ children, ...props }) => {
  */
 export const FeatureSelect = ({ layerPath, value, onChange, isMulti = false, placeholder, isClearable = false }) => {
   const theme = useTheme();
+  const dockedSelectOptions = useDockedSelectOptions();
   const selectStyles = useMemo(() => {
-    const base = makeSelectStyles(theme);
+    const base = makeSelectStyles(theme, dockedSelectOptions);
     return {
       ...base,
       valueContainer: (provided) => ({
@@ -62,7 +64,7 @@ export const FeatureSelect = ({ layerPath, value, onChange, isMulti = false, pla
         alignSelf: 'flex-start',
       }),
     };
-  }, [theme]);
+  }, [theme, dockedSelectOptions]);
 
   const { options, isLoading, handleInputChange, handleMenuOpen, handleMenuScrollToBottom } = useLayerFeatureMetadata(layerPath);
   const [noOptionsMessage, setNoOptionsMessage] = useState('No features found');

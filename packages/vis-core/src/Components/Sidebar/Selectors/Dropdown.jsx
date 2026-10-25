@@ -6,6 +6,7 @@ import { ChevronRightIcon } from '@heroicons/react/20/solid';
 import { useFilterContext } from "hooks/useFilterContext";
 import { SelectorLabel } from './SelectorLabel';
 import { makeSelectStyles, selectComponents } from 'utils/selectStyles';
+import { useDockedSelectOptions } from "./useDockedSelectOptions";
 
 const CONTROL_COLOUR = 'var(--palette-mid-grey, #f0f0f7)';
 
@@ -176,7 +177,8 @@ const formatOptionLabel = (data, meta) => {
  */
 export const Dropdown = ({ filter, onChange, disabled, excludeValue }) => {
   const theme = useTheme();
-  const selectStyles = useMemo(() => makeSelectStyles(theme), [theme]);
+  const dockedSelectOptions = useDockedSelectOptions();
+  const selectStyles = useMemo(() => makeSelectStyles(theme, dockedSelectOptions), [theme, dockedSelectOptions]);
 
   const { state: filterState } = useFilterContext();
   const [loading, setLoading] = useState(false);
