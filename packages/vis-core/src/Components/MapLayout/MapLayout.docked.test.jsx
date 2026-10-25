@@ -39,11 +39,21 @@ jest.mock("./Map", () => {
 
 const theme = { mq: { mobile: "(max-width: 900px)" } };
 
+// A map-click filter: its hint shows in the filters in overlay mode only.
+const mapClickFilter = {
+  id: "site-click",
+  type: "map",
+  paramName: "site",
+  filterName: "Click a site on the map to select it",
+  actions: [],
+  values: { source: "local", values: [] },
+};
+
 const mapState = {
   layers: {},
   visualisations: {},
   metadataTables: {},
-  filters: [],
+  filters: [mapClickFilter],
   isLoading: false,
   visualisationLoadingCount: 0,
   pageIsReady: false,
@@ -60,7 +70,7 @@ const renderLayout = ({ config = {}, appContext = {}, visualisations = {} } = {}
   };
   return render(
     <ThemeProvider theme={theme}>
-      <AppContext.Provider value={{ appPages: [], ...appContext }}>
+      <AppContext.Provider value={{ appPages: [{ url: "/", pageName: "Traffic counts" }], apiSchema: { paths: {} }, ...appContext }}>
         <PageContext.Provider value={pageContext}>
           <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
             <MapContext.Provider value={{ state: { ...mapState, visualisations }, dispatch: jest.fn() }}>
@@ -127,6 +137,13 @@ describe("MapLayout docked layout", () => {
     ).toBe("var(--text-icon)");
   });
 
+  it("drops the map-click hint from the filters column", () => {
+    renderLayout({ config: { layout: "docked" } });
+
+    expect(screen.getByRole("complementary", { name: "Filters" })).toBeInTheDocument();
+    expect(screen.queryByText("Click a site on the map to select it")).not.toBeInTheDocument();
+  });
+
   it("shows the page prompt while nothing is selected", () => {
     renderLayout({ config: { layout: "docked", dockedPrompt: "Click a site on the map to see its summary" } });
 
@@ -160,6 +177,7 @@ describe("MapLayout docked layout", () => {
   it("keeps the default overlay layout when no layout is set", () => {
     renderLayout();
 
+    expect(screen.getByText("Click a site on the map to select it")).toBeInTheDocument();
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("map")).getByText("Zone summary card")).toBeInTheDocument();
     expect(screen.getByText("Filters", { selector: "span" })).toBeInTheDocument();

@@ -34,6 +34,7 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { RectangleMode } from "@ookla/mapbox-gl-draw-rectangle";
 import debounce from "lodash.debounce";
 import { mapKeys, uniq } from "lodash";
+import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 
 const StyledMapContainer = styled.div`
   width: 100%;
@@ -107,6 +108,24 @@ const Map = (props) => {
   const listenerCallbackRef = useRef({});
   const hoverIdRef = useRef({});
   const sidebarIsOpen = props.sidebarIsOpen
+
+  // Docked layout: the legend takes the bottom-left corner, so move the zoom and
+  // compass control (added bottom-left by useMap) to the top-left, and back again
+  // when the layout falls back to the overlay below the docked breakpoint.
+  const isDocked = useDockedLayoutContext() != null;
+  const navPositionRef = useRef({ map: null, position: "bottom-left" });
+  useEffect(() => {
+    const nav = map?.__nav;
+    if (!nav || !map.removeControl || !map.addControl) return;
+    // A new map instance starts with the control where useMap put it.
+    const current = navPositionRef.current.map === map ? navPositionRef.current.position : "bottom-left";
+    const position = isDocked ? "top-left" : "bottom-left";
+    if (current !== position) {
+      map.removeControl(nav);
+      map.addControl(nav, position);
+    }
+    navPositionRef.current = { map, position };
+  }, [map, isDocked]);
 
   // Docked layout: the container is sized by fixed side columns rather than the
   // window, so keep MapLibre's canvas in step with the container itself.

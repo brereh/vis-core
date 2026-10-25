@@ -135,6 +135,7 @@ const PlainSection = ({ title, statusNode, children }) => {
  * @property {Object[]} filters - An array of filter objects containing information about the filters to be rendered.
  * @property {Function} onFilterChange - The function called when a filter value changes.
  * @property {boolean} [plain=false] - Render as an always-open labelled section instead of an accordion (docked map layout).
+ *   Also drops the map-click hints, which the docked "Selected feature" column's prompt already gives.
  * @returns {JSX.Element} The rendered SelectorSection component.
  */
 export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath, downloadShapefilePath, requestMethod = 'GET', plain = false }) => {
@@ -333,8 +334,8 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
       {isDiffPage && <InfoBox text={diffPageMessage} />}
       {isTrsePage && <InfoBox text={trsePageMessage} />}
 
-      {/* Render an InfoBox for each map filter */}
-      {mapFilters.map((filter) => (
+      {/* Render an InfoBox for each map filter (the docked layout's prompt replaces these) */}
+      {!plain && mapFilters.map((filter) => (
         <InfoBox key={filter.id} text={filter.filterName} />
       ))}
 

@@ -212,6 +212,36 @@ describe("SelectorSection component test", () => {
     expect(screen.getByTestId("mock-dropdown")).toBeInTheDocument();
   });
 
+  it.each([
+    ["overlay", false, true],
+    ["docked (plain)", true, false],
+  ])("map-click hints in the %s layout", (_label, plain, shown) => {
+    props = {
+      ...props,
+      filters: [
+        {
+          type: "map",
+          id: "site-click",
+          paramName: "site",
+          filterName: "Click a site on the map to select it",
+          values: { source: "local", values: [] },
+        },
+      ],
+    };
+    render(
+      <AppContext.Provider value={mockAppContexte}>
+        <MapContext.Provider value={{ state: mockState, dispatch }}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <SelectorSection {...props} plain={plain} />
+          </FilterContext.Provider>
+        </MapContext.Provider>
+      </AppContext.Provider>
+    );
+    const hint = screen.queryByText("Click a site on the map to select it");
+    if (shown) expect(hint).toBeInTheDocument();
+    else expect(hint).not.toBeInTheDocument();
+  });
+
   it("Basic use of dropdown type", async () => {
     props = {
       ...props,
