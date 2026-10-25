@@ -22,4 +22,17 @@ describe("useDockedSelectOptions", () => {
     expect(result.current).toEqual({ minHeight: DOCKED_SELECT_MIN_HEIGHT });
     expect(makeSelectStyles({}, result.current).control({}, {}).minHeight).toBe(32);
   });
+
+  it("returns the same object on every render, so memoised styles stay put", () => {
+    const wrapper = ({ children }) => (
+      <DockedLayoutContext.Provider value={{ calloutSlot: null, setSelection: jest.fn() }}>
+        {children}
+      </DockedLayoutContext.Provider>
+    );
+    const { result, rerender } = renderHook(() => useDockedSelectOptions(), { wrapper });
+    const first = result.current;
+    rerender();
+
+    expect(result.current).toBe(first);
+  });
 });
