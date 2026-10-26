@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import styled from "styled-components";
+import { Link } from "react-router-dom";
 import { api } from "../../services";
 import { SimpleDropdown } from "./SimpleDropdown";
 
@@ -170,8 +171,14 @@ const EmptyStateMessage = styled.div`
  * @param {string} props.config.columns[].header - Display name for the column header.
  * @param {boolean} [props.config.columns[].filter] - Whether to show a filter dropdown for this column.
  * @param {string} [props.config.columns[].type] - Data type of the column (e.g., 'boolean').
+ * @param {string} [props.config.columns[].linkTemplate] - In-app path the cell links to, with
+ *   `{field}` placeholders filled from the row, for example `/sites/{id}`.
  * @returns {JSX.Element} The rendered TableLayout component.
  */
+/** Fills `{field}` placeholders in a link template from a row, URL-encoding each value. */
+export const fillLinkTemplate = (template, row) =>
+  template.replace(/\{(\w+)\}/g, (_, key) => encodeURIComponent(row?.[key] ?? ""));
+
 export function TableLayout({ config }) {
   const { recordsEndpoint, columns = [] } = config || {};
   
@@ -449,7 +456,13 @@ export function TableLayout({ config }) {
                           key={column?.accessor}
                           $isNumeric={isNumericValue(cellValue)}
                         >
-                          {formatCellValue(cellValue, column)}
+                          {column?.linkTemplate ? (
+                            <Link to={fillLinkTemplate(column.linkTemplate, row)}>
+                              {formatCellValue(cellValue, column)}
+                            </Link>
+                          ) : (
+                            formatCellValue(cellValue, column)
+                          )}
                         </TableDataCell>
                       );
                     })}

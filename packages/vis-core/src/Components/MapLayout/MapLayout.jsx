@@ -229,10 +229,16 @@ export const MapLayout = () => {
 
   useEffect(() => {
     if (!initializedRef.current && state.pageIsReady) {
-      state.filters.forEach((filter) => {
+      // Filters with a value go last, so a restored map selection is not cleared by an empty
+      // map-click filter that sets the same parameter.
+      const hasValue = (f) => f.id in filterState && filterState[f.id] != null;
+      const ordered = [...state.filters].sort((a, b) => hasValue(a) - hasValue(b));
+      ordered.forEach((filter) => {
         filter.actions.forEach((actionObj) => {
-          // Use getInitialFilterValue to get persisted state or default value
-          let defaultValue = getInitialFilterValue(filter);
+          // The value FilterContext was initialised with (which includes a remembered map view),
+          // else the persisted state or default value.
+          let defaultValue =
+            filter.id in filterState ? filterState[filter.id] : getInitialFilterValue(filter);
 
           let sides = "";
           if (filter.filterName.includes("Left")) sides = "left";
@@ -246,7 +252,7 @@ export const MapLayout = () => {
       });
       initializedRef.current = true;
     }
-  }, [dispatch, state.pageIsReady, state.filters, state.visualisations]);
+  }, [dispatch, state.pageIsReady, state.filters, state.visualisations]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per page; filterState is read, not tracked
 
   useEffect(() => {
     if (pageRef.current !== pageContext) {

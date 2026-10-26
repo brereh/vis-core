@@ -3,6 +3,9 @@ import styled from "styled-components";
 /** Media query string for mobile breakpoint (max-width: 900px). */
 export const MOBILE_Q = '(max-width: 900px)';
 
+/** Largest circle the legend draws, in px. Radii that grow with zoom are scaled down to fit. */
+export const LEGEND_MAX_DIAMETER = 48;
+
 /**
  * Returns the mobile media query string from the theme if available,
  * otherwise falls back to {@link MOBILE_Q}.
@@ -83,10 +86,16 @@ export const LegendContainer = styled.div`
     gap: 0 10px;
   }
 
-  /* Docked map layout: bottom-left of the map area. */
+  /* Docked map layout: bottom-left of the map area, at a fixed width that never runs past the
+     map, scrolling rather than growing taller than it. */
   ${({ $docked }) => $docked && `
     left: 10px;
     right: auto;
+    width: min(280px, calc(100% - 20px));
+    max-width: calc(100% - 20px);
+    max-height: calc(100% - 60px);
+    overflow-y: auto;
+    flex-wrap: nowrap;
   `}
 
   ${({ $outside }) => $outside && `
