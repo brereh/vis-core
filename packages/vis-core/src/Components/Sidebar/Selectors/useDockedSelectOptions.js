@@ -4,12 +4,12 @@ import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 export const DOCKED_SELECT_MIN_HEIGHT = 32;
 
 // One shared object, so the selects' useMemo'd styles aren't rebuilt on every render.
-const DOCKED_SELECT_OPTIONS = Object.freeze({ minHeight: DOCKED_SELECT_MIN_HEIGHT });
+const DOCKED_SELECT_OPTIONS = Object.freeze({ minHeight: DOCKED_SELECT_MIN_HEIGHT, wrapValues: true });
 
 /**
  * Extra `makeSelectStyles` options for selects in the docked filter column.
  *
- * @returns {Object|undefined} `{ minHeight }` when docked, otherwise undefined (keep defaults).
+ * @returns {Object|undefined} `{ minHeight, wrapValues }` when docked, otherwise undefined (keep defaults).
  */
 export const useDockedSelectOptions = () =>
   useDockedLayoutContext() != null ? DOCKED_SELECT_OPTIONS : undefined;

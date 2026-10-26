@@ -36,6 +36,7 @@ export const selectComponents = {
  * @param {string} [opts.fontSize='0.85rem'] - Base font size.
  * @param {string} [opts.borderColor='#ddd'] - Default control border color.
  * @param {number} [opts.zIndex=9999] - z-index for menuPortal.
+ * @param {boolean} [opts.wrapValues=false] - Wrap long selected values instead of truncating them.
  * @returns {Record<string, Function>} react-select styles object.
  */
 export function makeSelectStyles(theme, opts = {}) {
@@ -44,7 +45,12 @@ export function makeSelectStyles(theme, opts = {}) {
     fontSize = "0.85rem",
     borderColor,
     zIndex = 9999,
+    wrapValues = false,
   } = opts;
+  // Narrow columns: let selected values wrap onto more lines instead of being cut off.
+  const wrap = wrapValues
+    ? { whiteSpace: "normal", overflow: "visible", textOverflow: "clip", overflowWrap: "anywhere" }
+    : {};
   const isLegacyFont = (font) =>
     typeof font === "string" && font.includes("Hanken Grotesk");
 
@@ -103,6 +109,7 @@ export function makeSelectStyles(theme, opts = {}) {
       fontFamily,
       color: textColor,
       fontSize,
+      ...wrap,
     }),
     placeholder: (base) => ({
       ...base,
@@ -113,10 +120,12 @@ export function makeSelectStyles(theme, opts = {}) {
     multiValue: (base) => ({
       ...base,
       fontFamily,
+      ...(wrapValues && { maxWidth: "100%" }),
     }),
     multiValueLabel: (base) => ({
       ...base,
       fontFamily,
+      ...wrap,
     }),
     menu: (base) => ({
       ...base,

@@ -12,8 +12,8 @@ import { bngToWgs84 } from "utils/coordinates";
 
 const FormPageWrapper = styled.div`
   display: flex;
-  height: ${props => props.$centered ? 'auto' : 'calc(100vh - 75px)'};
-  min-height: calc(100vh - 75px);
+  height: ${props => props.$centered ? 'auto' : 'calc(100vh - var(--app-navbar-height, 75px) - var(--app-statusbar-height, 0px))'};
+  min-height: calc(100vh - var(--app-navbar-height, 75px) - var(--app-statusbar-height, 0px));
   overflow: ${props => props.$centered ? 'auto' : 'hidden'};
   justify-content: ${props => props.$centered ? 'center' : 'flex-start'};
   align-items: ${props => props.$centered ? 'flex-start' : 'stretch'};
@@ -22,7 +22,7 @@ const FormPageWrapper = styled.div`
   @media (max-width: 1024px) {
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 75px);
+    min-height: calc(100vh - var(--app-navbar-height, 75px) - var(--app-statusbar-height, 0px));
     justify-content: flex-start;
   }
 `;
