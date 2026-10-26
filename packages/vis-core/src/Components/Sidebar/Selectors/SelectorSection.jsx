@@ -101,17 +101,29 @@ const WarningStatus = ({ message }) => {
   );
 };
 
+// Styled like an open AccordionSection (grey header bar over a white card), without the toggle.
 const PlainSectionHeading = styled.h3`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 12px 0 4px;
-  padding-left: 5px;
+  margin: 5px 0 0;
+  padding: 8px 10px;
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-icon);
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 5px 5px 0 0;
+`;
+
+const PlainSectionBody = styled.div`
+  padding: 12px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-top: 0;
+  border-radius: 0 0 5px 5px;
 `;
 
 /**
@@ -125,7 +137,7 @@ const PlainSection = ({ title, statusNode, children }) => {
         {title}
         {statusNode}
       </PlainSectionHeading>
-      {children}
+      <PlainSectionBody>{children}</PlainSectionBody>
     </section>
   );
 };

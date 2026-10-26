@@ -19,7 +19,7 @@ describe("useDockedSelectOptions", () => {
     );
     const { result } = renderHook(() => useDockedSelectOptions(), { wrapper });
 
-    expect(result.current).toEqual({ minHeight: DOCKED_SELECT_MIN_HEIGHT });
+    expect(result.current).toEqual({ minHeight: DOCKED_SELECT_MIN_HEIGHT, wrapValues: true });
     expect(makeSelectStyles({}, result.current).control({}, {}).minHeight).toBe(32);
   });
 

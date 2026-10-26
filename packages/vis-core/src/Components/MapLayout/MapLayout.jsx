@@ -20,7 +20,7 @@ import { actionTypes } from "reducers";
 
 const LayoutContainer = styled.div`
   display: flex;
-  height: calc(100vh - 75px);
+  height: calc(100vh - var(--app-navbar-height, 75px) - var(--app-statusbar-height, 0px));
   overflow: hidden;
   @media ${props => props.theme.mq.mobile} {
    flex-direction: column;   /* stack Sidebar above Map */

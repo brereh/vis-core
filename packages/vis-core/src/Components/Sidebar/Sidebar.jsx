@@ -103,20 +103,21 @@ const SidebarContainer = styled.div`
     }
   `}`;
 
-// Docked layout: a static, full-height column with no overlay or collapse toggle,
-// and denser content than the overlay sidebar (14px text, 36px accordion rows).
-// Selects get 32px controls through useDockedSelectOptions. Focus outlines are
-// left to the controls' own styles.
+// Docked layout: a static, full-height column with no overlay or collapse toggle. It follows the
+// overlay sidebar's look (grey panel, white cards with grey header bars), a little denser so the
+// controls keep their full width in the narrower column. Selects get 32px controls and wrapping
+// values through useDockedSelectOptions. Focus outlines are left to the controls' own styles.
 const DockedSidebarContainer = styled.div`
   height: 100%;
-  padding: 12px;
+  padding: 10px;
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   text-align: left;
   font-size: 0.875rem;
-  background-color: var(--palette-white);
+  background-color: #f5f5f5;
   border-right: 1px solid var(--palette-mid-grey);
+  scrollbar-width: thin;
 
   ${SidebarHeader} {
     font-size: 1.125rem;
@@ -126,9 +127,15 @@ const DockedSidebarContainer = styled.div`
 
   ${AccordionHeader} {
     min-height: 36px;
-    padding: 6px 10px;
-    margin-top: 4px;
+    padding: 8px 10px;
     font-size: 0.875rem;
+  }
+
+  /* Open sections: less side padding than the overlay, so nested cards and controls aren't
+     squeezed. */
+  ${AccordionHeader} + div {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 `;
 

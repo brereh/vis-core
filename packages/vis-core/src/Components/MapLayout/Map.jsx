@@ -38,7 +38,7 @@ import { useDockedLayoutContext } from "contexts/DockedLayoutContext";
 
 const StyledMapContainer = styled.div`
   width: 100%;
-  height: calc(100vh - 75px);
+  height: calc(100vh - var(--app-navbar-height, 75px) - var(--app-statusbar-height, 0px));
   @media ${props => props.theme.mq.mobile} {
    height: auto;             /* let content dictate height */
   }

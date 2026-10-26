@@ -299,7 +299,20 @@ export const DynamicLegend = ({ map }) => {
               let label;
               let rawLabel;
               let numericValue;
-              if (customLabels && customLabels.length === length) {
+              // Categorical bands label each value, so look the label up by value: the data may
+              // hold only some of the categories (for example no "incomplete" sites).
+              const categoryIndex =
+                isCategorical && customLabels && Array.isArray(metricDefinition?.values)
+                  ? metricDefinition.values.findIndex(
+                      (v) => convertStringToNumber(v) === convertStringToNumber(stop.value)
+                    )
+                  : -1;
+              if (categoryIndex !== -1 && customLabels[categoryIndex] != null) {
+                rawLabel = customLabels[categoryIndex];
+                label = rawLabel;
+                numericValue = convertStringToNumber(stop.value);
+                hasCustomLabels = true;
+              } else if (customLabels && customLabels.length === length) {
                 rawLabel = customLabels[idx];
                 label = rawLabel;
                 // The underlying stop value is still numeric (e.g. 0, 20, 40, 60, 80)

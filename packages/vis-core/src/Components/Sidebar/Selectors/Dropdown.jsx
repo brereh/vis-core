@@ -110,10 +110,14 @@ const ValidityIcon = ({ isValid }) => (
 * @param {boolean} [props.isValid] - Validity state (used when showIcon = true)
 * @returns {JSX.Element} Label content with optional icon.
 */
+// Wrapping follows the react-select value style: ellipsis by default, wrapped when the select
+// sets `wrapValues` (docked layout).
+const INHERIT_WRAP = { overflow: 'inherit', textOverflow: 'inherit', whiteSpace: 'inherit' };
+
 const LabelWithValidity = ({ label, showIcon, isValid }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
+  <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', ...INHERIT_WRAP }}>
     {showIcon && <ValidityIcon isValid={isValid} />}
-    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <span style={INHERIT_WRAP}>
       {label}
     </span>
   </span>
@@ -186,13 +190,16 @@ export const Dropdown = ({ filter, onChange, disabled, excludeValue }) => {
   const prevOptionsRef = useRef([]);
   const prevSelectedOptionsRef = useRef(null);
   const [isAllSelected, setIsAllSelected] = useState(false);
-  const animatedComponents = useMemo(
-    () => ({
-      ...makeAnimated(),
+  // The animated chip wrapper fixes each chip's width, which cuts long labels off in the narrow
+  // docked column, so docked selects keep react-select's plain chips (and wrap their labels).
+  const animatedComponents = useMemo(() => {
+    const { MultiValue, ...animated } = makeAnimated();
+    return {
+      ...animated,
+      ...(dockedSelectOptions ? {} : { MultiValue }),
       ...selectComponents,
-    }),
-    []
-  );
+    };
+  }, [dockedSelectOptions]);
 
   const baseOptions = useMemo(() => {
     return filter.values.values
