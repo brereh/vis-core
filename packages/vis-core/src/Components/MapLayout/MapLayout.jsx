@@ -116,18 +116,26 @@ const DockedFeatureColumn = styled.aside`
   flex: 0 0 auto;
   width: ${({ $width }) => $width};
   height: 100%;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: var(--palette-white);
+  background-color: #f5f5f5;
   border-left: 1px solid var(--palette-mid-grey);
+  scrollbar-width: thin;
 `;
 
 const DockedPrompt = styled.p`
   margin: 0;
+  padding: 12px;
   color: var(--text-icon);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
+  background-color: var(--palette-white);
+  border: 1px dashed #ccc;
+  border-radius: 5px;
 `;
 
 const VisuallyHidden = styled.div`
