@@ -120,6 +120,10 @@ const RowButton = styled(RowLabel).attrs({ as: "button", type: "button" })`
 
 const CellArea = styled.div`
   flex: 1;
+  /* Clipped, so the drawn chart doesn't count towards the area's minimum width: otherwise it never
+     re-measures smaller when the window narrows, and the chart scrolls sideways. The inline
+     min-width still keeps cells at their minimum size, scrolling only below that. */
+  overflow: hidden;
 
   /* Outline the cell under the pointer, so it is clear which value the tooltip describes. */
   rect[data-testid="heatmap-cell"]:hover {
@@ -578,7 +582,7 @@ export const HeatmapChart = ({ config, data, formatters = {} }) => {
 
   const renderChart = () => (
     <ScrollBox onMouseLeave={() => setTooltip(null)}>
-      <Grid style={{ minWidth: "min-content" }}>
+      <Grid>
         <LabelColumn
           role={selectable ? "group" : undefined}
           aria-label={selectable ? `Select a row in ${title || "the heatmap"}` : undefined}
