@@ -163,8 +163,8 @@ describe("DynamicLegend", () => {
   });
 
   it.each([
-    ["default layout: bottom-right", null, { right: "10px", left: "" }],
-    ["docked layout: bottom-left", { calloutSlot: null, setSelection: jest.fn() }, { right: "auto", left: "10px" }],
+    ["default layout: bottom-right", null, { right: "10px", left: "", bottom: "40px" }],
+    ["docked layout: bottom-right, just above the attribution", { calloutSlot: null, setSelection: jest.fn() }, { right: "10px", left: "auto", bottom: "30px" }],
   ])("positions the legend for the %s", (_label, dockedValue, expected) => {
     const mockMapWithGetStyle = {
       ...mockMap,
@@ -198,7 +198,7 @@ describe("DynamicLegend", () => {
     });
 
     const legend = window.getComputedStyle(container.firstChild);
-    expect(legend.bottom).toBe("40px");
+    expect(legend.bottom).toBe(expected.bottom);
     expect(legend.right).toBe(expected.right);
     expect(legend.left).toBe(expected.left);
   });

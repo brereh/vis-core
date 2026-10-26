@@ -237,6 +237,26 @@ export const DynamicLegend = ({ map }) => {
             colorStyle === "categorical" ||
             (colorStops && colorStops.some((s) => isNaN(convertStringToNumber(s.value))));
 
+          // A selection with no values (every row null) leaves the classifier without a range, so
+          // a graduated layer's stops come out as NaN or ±Number.MAX_VALUE. Say there is no data
+          // rather than draw a scale from them.
+          const isUsableStop = (stop) => {
+            const v = convertStringToNumber(stop.value);
+            return Number.isFinite(v) && Math.abs(v) < 1e15;
+          };
+          if (colorStyle !== "categorical" && colorStops?.length && !colorStops.every(isUsableStop)) {
+            return {
+              layerId: layer.id,
+              title: displayValue,
+              subtitle: legendSubtitleText,
+              legendEntries: [],
+              legendEntriesNumeric: [],
+              noData: true,
+              type: layer.type,
+              style: colorStyle,
+            };
+          }
+
           // Note: when invertColorScheme is true, the map paint expression was already
           // built with the colours reversed (via calculateColours in MapVisualisation).
           // interpretColorExpression reads those stops back in ascending value order with

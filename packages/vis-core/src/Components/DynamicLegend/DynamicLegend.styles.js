@@ -86,11 +86,12 @@ export const LegendContainer = styled.div`
     gap: 0 10px;
   }
 
-  /* Docked map layout: bottom-left of the map area, at a fixed width that never runs past the
-     map, scrolling rather than growing taller than it. */
+  /* Docked map layout: bottom right, just above the map attribution, at a fixed width that never
+     runs past the map, scrolling rather than growing taller than it. */
   ${({ $docked }) => $docked && `
-    left: 10px;
-    right: auto;
+    right: 10px;
+    bottom: 30px;
+    left: auto;
     width: min(280px, calc(100% - 20px));
     max-width: calc(100% - 20px);
     max-height: calc(100% - 60px);

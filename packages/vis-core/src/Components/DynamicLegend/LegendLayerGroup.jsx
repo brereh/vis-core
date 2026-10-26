@@ -120,6 +120,23 @@ const LegendLayerGroup = ({
 
   const isPopoverOpen = openPopoverId === item.layerId;
 
+  // No values for the current selection: name the layer and say so, with no scale.
+  if (item.noData) {
+    return (
+      <LegendGroup $isOpen={false}>
+        <LegendItemContainer>
+          <LegendHeader>
+            <div>
+              <LegendTitle>{item.title}</LegendTitle>
+              {item.subtitle && <LegendSubtitle>{item.subtitle}</LegendSubtitle>}
+            </div>
+          </LegendHeader>
+          <LegendLabel>No data for this selection.</LegendLabel>
+        </LegendItemContainer>
+      </LegendGroup>
+    );
+  }
+
   return (
     <LegendGroup $isOpen={isPopoverOpen}>
       <LegendItemContainer>
