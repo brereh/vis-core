@@ -120,6 +120,12 @@ const RowButton = styled(RowLabel).attrs({ as: "button", type: "button" })`
 
 const CellArea = styled.div`
   flex: 1;
+
+  /* Outline the cell under the pointer, so it is clear which value the tooltip describes. */
+  rect[data-testid="heatmap-cell"]:hover {
+    stroke: ${({ theme }) => theme.colors.text};
+    stroke-width: 2px;
+  }
 `;
 
 const Tooltip = styled.div`
