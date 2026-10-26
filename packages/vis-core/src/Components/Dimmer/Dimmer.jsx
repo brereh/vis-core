@@ -100,6 +100,20 @@ const UpdatingPill = styled.div`
   pointer-events: none;
 `;
 
+// Thin bar under the navbar, shown at once for every later load: an unobtrusive sign that
+// something is happening, even for loads too quick to warrant the pill.
+const TopBar = styled.div.attrs({ 'data-testid': 'loading-bar' })`
+  position: fixed;
+  top: var(--app-navbar-height, 75px);
+  left: 0;
+  right: 0;
+  z-index: 999999;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(0, 222, 198, 0.15);
+  pointer-events: none;
+`;
+
 const PillTrack = styled(ProgressTrack)`
   width: 64px;
   height: 4px;
@@ -109,10 +123,10 @@ const PillTrack = styled(ProgressTrack)`
  * Dimmer shows that a page is loading, without getting in the way more than it needs to.
  *
  * - The first load after mount blocks: a dimming overlay and a centred loader card, shown at once.
- * - Later loads (a filter change, a layer refresh) don't block: a small "Updating" pill at the top
- *   of the window, with no overlay, so the page stays usable.
- * - A later load only shows anything if it takes longer than `showDelay`, and once shown stays at
- *   least `minVisible`, so quick loads don't flash and slow ones don't flicker.
+ * - Later loads (a filter change, a layer refresh) don't block. A thin bar under the navbar shows
+ *   at once; a small "Updating" pill joins it if the load lasts longer than `showDelay`. There is
+ *   no overlay, so the page stays usable.
+ * - Each indicator stays at least `minVisible` once shown, so quick loads don't flicker.
  *
  * @component
  * @property {boolean} dimmed - Whether the page is loading.
@@ -150,6 +164,24 @@ export const Dimmer = ({
   // What is on screen, which lags `dimmed` by showDelay (later loads) and minVisible.
   const [visible, setVisible] = useState(Boolean(dimmed));
   const shownAtRef = useRef(dimmed ? Date.now() : 0);
+  // Later loads: the top bar shows at once and stays at least minVisible.
+  const [barVisible, setBarVisible] = useState(false);
+  const barShownAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!hasLoadedOnce) return undefined;
+    if (dimmed && !barVisible) {
+      barShownAtRef.current = Date.now();
+      setBarVisible(true);
+      return undefined;
+    }
+    if (!dimmed && barVisible) {
+      const remaining = Math.max(0, minVisible - (Date.now() - barShownAtRef.current));
+      const timer = setTimeout(() => setBarVisible(false), remaining);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [dimmed, barVisible, hasLoadedOnce, minVisible]);
 
   useEffect(() => {
     let timer;
@@ -189,19 +221,29 @@ export const Dimmer = ({
     }
   }, [visible]);
 
-  if (!visible) {
-    return null;
+  if (!blocking) {
+    if (!showLoader) return null;
+    return (
+      <>
+        {barVisible && (
+          <TopBar aria-hidden="true">
+            <ProgressFill />
+          </TopBar>
+        )}
+        {visible && (
+          <UpdatingPill role="status" aria-live="polite">
+            {updatingText}
+            <PillTrack>
+              <ProgressFill role="progressbar" aria-valuetext={updatingText} />
+            </PillTrack>
+          </UpdatingPill>
+        )}
+      </>
+    );
   }
 
-  if (!blocking) {
-    return showLoader ? (
-      <UpdatingPill role="status" aria-live="polite">
-        {updatingText}
-        <PillTrack>
-          <ProgressFill role="progressbar" aria-valuetext={updatingText} />
-        </PillTrack>
-      </UpdatingPill>
-    ) : null;
+  if (!visible) {
+    return null;
   }
 
   const currentMessage = safeMessages[Math.min(messageIndex, safeMessages.length - 1)];

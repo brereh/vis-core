@@ -61,13 +61,16 @@ describe("Dimmer loader tester", () => {
       return view;
     };
 
-    it("shows nothing for a load quicker than the delay", () => {
+    it("shows only the thin bar for a load quicker than the delay", () => {
       const { rerender } = finishFirstLoad();
       rerender(<Dimmer dimmed showLoader />);
+      expect(screen.getByTestId("loading-bar")).toBeInTheDocument();
       act(() => jest.advanceTimersByTime(200));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
       rerender(<Dimmer dimmed={false} showLoader />);
       act(() => jest.advanceTimersByTime(1000));
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("loading-bar")).not.toBeInTheDocument();
       expect(screen.queryByTestId("dimmed-overlay")).not.toBeInTheDocument();
     });
 
