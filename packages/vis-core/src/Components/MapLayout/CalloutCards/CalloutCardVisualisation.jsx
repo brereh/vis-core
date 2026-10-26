@@ -283,6 +283,107 @@ const CardContent = styled.div`
   }
 `;
 
+/**
+ * Docked map layout card: the same look as the docked filter column's sections (a grey header
+ * bar over a white body), with the content set as compact facts rather than centred tiles.
+ */
+const DockedCardFrame = styled(CardContainer)`
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+
+  ${CardHeader} {
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ddd;
+    box-sizing: border-box;
+  }
+
+  ${CardTitle} {
+    margin: 0;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  ${StatusSlot} {
+    position: static;
+    min-width: 0;
+    min-height: 0;
+    margin-left: auto;
+  }
+
+  ${CardContent} {
+    padding: 12px;
+
+    p {
+      font-size: 0.875rem;
+      margin: 0 0 8px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    a {
+      color: var(--palette-navy, #0d0f3d);
+      font-weight: 600;
+    }
+
+    /* Tiles: a two-column grid of small left-aligned facts, not centred cards. */
+    .card-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+
+    .card,
+    .card.small {
+      margin: 0;
+      padding: 8px 10px;
+      text-align: left;
+      background-color: #fafafa;
+      border: 1px solid #e3e3e3;
+      border-radius: 5px;
+      box-shadow: none;
+    }
+
+    .card .label {
+      margin-bottom: 2px;
+      font-size: 0.6875rem;
+      text-align: left;
+      color: #5b6470;
+    }
+
+    .card .value,
+    .card .value.small {
+      font-size: 0.95rem;
+      text-align: left;
+    }
+
+    /* Facts as a definition list: label column and value column. */
+    dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 6px 12px;
+      margin: 0 0 12px;
+      font-size: 0.875rem;
+    }
+
+    dt {
+      color: #5b6470;
+    }
+
+    dd {
+      margin: 0;
+      color: var(--text-icon);
+    }
+  }
+`;
+
 const ToggleButton = styled.button`
   position: absolute;
   top: ${PADDING}px;
@@ -411,6 +512,7 @@ export const CalloutCardVisualisation = ({
   const previousDataSignatureRef = useRef(null);
   const updatePingTimerRef = useRef(null);
   const isVisibleRef = useRef(false);
+  const CardFrame = docked ? DockedCardFrame : CardContainer;
 
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -830,12 +932,12 @@ export const CalloutCardVisualisation = ({
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-        <CardContainer $isVisible={isVisible} $docked={docked}>
+        <CardFrame $isVisible={isVisible} $docked={docked}>
           {renderCardHeader("Loading...", { showStatus: false })}
           <CardContent>
             <h3>Loading...</h3>
           </CardContent>
-        </CardContainer>
+        </CardFrame>
 
         {renderHandle()}
       </ParentContainer>
@@ -854,7 +956,7 @@ export const CalloutCardVisualisation = ({
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-        <CardContainer $isVisible={isVisible} $docked={docked}>
+        <CardFrame $isVisible={isVisible} $docked={docked}>
           {renderCardHeader(cardName)}
 
           {recordSelector}
@@ -1027,7 +1129,7 @@ export const CalloutCardVisualisation = ({
           )}
 
           {renderDownload()}
-        </CardContainer>
+        </CardFrame>
 
         {renderHandle()}
       </ParentContainer>
@@ -1042,7 +1144,7 @@ export const CalloutCardVisualisation = ({
         data-callout-card-name={visualisationName}
         data-callout-card-open={isVisible ? "true" : "false"}
       >
-      <CardContainer $isVisible={isVisible} $docked={docked}>
+      <CardFrame $isVisible={isVisible} $docked={docked}>
         {renderCardHeader(cardName)}
 
         {recordSelector}
@@ -1079,7 +1181,7 @@ export const CalloutCardVisualisation = ({
         )}
 
         {renderDownload()}
-      </CardContainer>
+      </CardFrame>
 
       {renderHandle()}
     </ParentContainer>
