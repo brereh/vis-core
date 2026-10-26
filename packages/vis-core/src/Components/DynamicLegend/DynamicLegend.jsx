@@ -115,7 +115,10 @@ export const DynamicLegend = ({ map }) => {
             (layer.metadata.shouldShowInLegend ?? layer.metadata.isStylable);
           const isWithinZoomRange = (layer.minzoom === undefined || state.currentZoom >= layer.minzoom) &&
             (layer.maxzoom === undefined || state.currentZoom <= layer.maxzoom);
-          return shouldShowInLegend && isWithinZoomRange;
+          // A layer switched off (for example under Map layer control) has nothing on the map
+          // to explain, so it has no legend entry.
+          const isVisible = layer.layout?.visibility !== "none";
+          return shouldShowInLegend && isWithinZoomRange && isVisible;
         })
         .map((layer, index) => {
           // --- Resolve display text ---
