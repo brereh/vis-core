@@ -417,8 +417,8 @@ export const DynamicLegend = ({ map }) => {
   useEffect(() => {
     if (!legendRef.current) return;
 
-    // Mobile/tablet: let CSS make it full width; do nothing else
-    if (isMobile) {
+    // Mobile/tablet: CSS makes it full width. Docked: CSS gives it a fixed width.
+    if (isMobile || isDocked) {
       legendRef.current.style.removeProperty('width');
       return;
     }
@@ -432,7 +432,7 @@ export const DynamicLegend = ({ map }) => {
     // Get the container's natural content width plus the scrollbar width.
     const newWidth = legendRef.current.scrollWidth + scrollbarWidth;
     legendRef.current.style.width = `${newWidth}px`;
-  }, [legendItems, isMobile]);
+  }, [legendItems, isMobile, isDocked]);
   
   if (legendItems.length === 0) {
     return null;

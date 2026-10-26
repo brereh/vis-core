@@ -132,8 +132,17 @@ const Tooltip = styled.div`
   color: ${({ theme }) => theme.colors.surface};
   background: ${({ theme }) => theme.colors.primary};
   border-radius: var(--radius-xxs);
-  transform: translate(-50%, calc(-100% - 6px));
+  /* Above the cell, or below it for the top rows: ScrollBox clips anything above its top edge.
+     Near the left or right edge it is aligned to the cell rather than centred on it. */
+  transform: ${({ $below, $align }) =>
+    `translate(${$align === "start" ? "0" : $align === "end" ? "-100%" : "-50%"}, ${
+      $below ? "6px" : "calc(-100% - 6px)"
+    })`};
 `;
+
+// Room the tooltip needs above a cell (its height plus the gap), and beside one when centred.
+const TOOLTIP_ROOM_ABOVE = 32;
+const TOOLTIP_HALF_WIDTH = 90;
 
 const Legend = styled.div`
   display: flex;
@@ -662,6 +671,7 @@ export const HeatmapChart = ({ config, data, formatters = {} }) => {
                               text,
                               x: x + cellWidth / 2,
                               y,
+                              cellHeight,
                             })
                           }
                         />
@@ -719,9 +729,17 @@ export const HeatmapChart = ({ config, data, formatters = {} }) => {
       {tooltip && (
         <Tooltip
           role="tooltip"
+          $below={tooltip.y < TOOLTIP_ROOM_ABOVE}
+          $align={
+            tooltip.x < TOOLTIP_HALF_WIDTH
+              ? "start"
+              : tooltip.x > (cellAreaRef.current?.clientWidth ?? Infinity) - TOOLTIP_HALF_WIDTH
+                ? "end"
+                : "center"
+          }
           style={{
             left: (cellAreaRef.current?.offsetLeft ?? 0) + tooltip.x,
-            top: tooltip.y,
+            top: tooltip.y < TOOLTIP_ROOM_ABOVE ? tooltip.y + tooltip.cellHeight : tooltip.y,
           }}
         >
           {tooltip.text}

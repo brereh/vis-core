@@ -91,6 +91,14 @@ describe("HeatmapChart", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Mon 6 Oct 05:00: 50");
   });
 
+  it("puts the tooltip below a top-row cell, where there is no room above", () => {
+    render(<HeatmapChart config={config} data={makeData()} />);
+    const cell = screen.getAllByTestId("heatmap-cell")[0];
+    fireEvent.mouseEnter(cell);
+    const tip = screen.getByRole("tooltip");
+    expect(Number.parseFloat(tip.style.top)).toBeGreaterThan(Number(cell.getAttribute("y")));
+  });
+
   it("selects a row with the keyboard and updates the named filter", async () => {
     const user = userEvent.setup();
     const dispatch = jest.fn();

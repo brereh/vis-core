@@ -1,8 +1,10 @@
+import { LEGEND_MAX_DIAMETER } from "./DynamicLegend.styles";
 import React, { useId } from "react";
 import { WidthTrackSvg } from "./ContinuousGradientBar.styles";
 
 // Vertical padding (px) added above and below track content to prevent clipping.
 const TRACK_PAD = 2;
+
 
 /**
  * LineWidthTrack
@@ -71,11 +73,14 @@ export const LineWidthTrack = ({ stops }) => {
  *   each element has `{ color, width, percent }`.
  */
 export const CircleTrack = ({ stops }) => {
-  const diameters = stops.map(s => (Number.isFinite(s.width) && s.width > 0 ? s.width : 2));
+  const rawDiameters = stops.map(s => (Number.isFinite(s.width) && s.width > 0 ? s.width : 2));
+  // Circle sizes match the map up to LEGEND_MAX_DIAMETER; above that (for example a radius that
+  // grows with zoom) every circle is scaled by the same factor, so the proportions stay right.
+  const scale = Math.min(1, LEGEND_MAX_DIAMETER / Math.max(...rawDiameters));
+  const diameters = rawDiameters.map(d => d * scale);
   const maxDiameter = Math.max(...diameters);
 
   // The container height accommodates the largest circle plus vertical clearance.
-  // Circle sizes are used as-is to match on-map sizing exactly.
   const trackHeight = maxDiameter + TRACK_PAD * 2;
 
   return (

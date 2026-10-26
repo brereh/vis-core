@@ -1,5 +1,5 @@
 import styled, { keyframes } from "styled-components";
-import { mobileMQ } from "./DynamicLegend.styles";
+import { LEGEND_MAX_DIAMETER, mobileMQ } from "./DynamicLegend.styles";
 
 /** Flex column wrapper for a single legend group's items. */
 export const LegendItemContainer = styled.div`
@@ -73,8 +73,9 @@ export const LegendItem = styled.div`
  * @prop {string} color - CSS background colour.
  */
 export const CircleSwatch = styled.div`
-  width: ${(props) => props.diameter}px;
-  height: ${(props) => props.diameter}px;
+  width: ${(props) => Math.min(props.diameter, LEGEND_MAX_DIAMETER)}px;
+  height: ${(props) => Math.min(props.diameter, LEGEND_MAX_DIAMETER)}px;
+  flex-shrink: 0;
   background-color: ${(props) => props.color};
   border: 1px solid #333;
   border-radius: 50%;

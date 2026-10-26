@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useContext, useReducer } from "react";
+import React, { createContext, useCallback, useEffect, useContext, useMemo, useReducer } from "react";
 import { actionTypes, mapReducer, errorActionTypes } from "reducers";
 import {
   hasRouteParameterOrQuery,
@@ -12,11 +12,17 @@ import {
   getDefaultLayerBufferSize,
   buildCategoricalLegendKey,
   getInitialFilterValue,
+  isPersistedValueValid,
+  isMapViewMemoryEnabled,
+  filterMemoryKey,
+  readMapView,
+  writeMapView,
 } from "utils";
 import { defaultMapZoom, defaultMapCentre, defaultMapStyle } from "defaults";
 import { getDownloadMetadataPath } from "utils/downloads";
 import { AppContext } from "./AppContext";
 import { PageContext } from "./PageContext";
+import { FilterContext } from "./FilterContext";
 import { ErrorContext } from "./ErrorContext";
 import { api } from "services";
 import { useMetadataDrivenFilters } from "hooks/useMetadataDrivenFilters";
@@ -90,6 +96,15 @@ export const MapProvider = ({ children }) => {
   const errorContext = useContext(ErrorContext);
   const errorDispatch = errorContext?.dispatch ?? (() => {}); // no-op if provider missing
 
+  // The view remembered from an earlier visit to this page in this tab, if the page remembers it.
+  const rememberView = isMapViewMemoryEnabled(appContext, pageContext);
+  const rememberedView = useMemo(
+    () => (rememberView ? readMapView(pageContext.url) : null),
+    [rememberView, pageContext.url]
+  );
+  const rememberedZoom = Number.isFinite(rememberedView?.zoom) ? rememberedView.zoom : null;
+  const rememberedCentre = Array.isArray(rememberedView?.centre) ? rememberedView.centre : null;
+
   // Initialize state within the provider function
   const initialBaseMapId =
     readBaseMapPreference(BASE_MAPS) ??
@@ -103,12 +118,12 @@ export const MapProvider = ({ children }) => {
   const initialState = {
     baseMapId: initialBaseMapId,
     mapStyle: initialMapStyle,
-    mapCentre: pageContext.customMapCentre
+    mapCentre: rememberedCentre ?? (pageContext.customMapCentre
       ? parseStringToArray(pageContext.customMapCentre)
-      : defaultMapCentre,
-    mapZoom: pageContext.customMapZoom
+      : defaultMapCentre),
+    mapZoom: rememberedZoom ?? (pageContext.customMapZoom
       ? parseFloat(pageContext.customMapZoom)
-      : defaultMapZoom,
+      : defaultMapZoom),
     layers: {},
     colorSchemesByLayer: {},
     customColorSchemeSelectedByLayer: {},
@@ -131,9 +146,9 @@ export const MapProvider = ({ children }) => {
     selectedFeatures: [],
     isFeatureSelectActive: false,
     visualisedFeatureIds: null,
-    currentZoom: pageContext.customMapZoom
+    currentZoom: rememberedZoom ?? (pageContext.customMapZoom
       ? parseFloat(pageContext.customMapZoom)
-      : defaultMapZoom,
+      : defaultMapZoom),
   };
 
 
@@ -149,6 +164,15 @@ export const MapProvider = ({ children }) => {
     }
   }, [state.baseMapId]);
 
+  // Remembered filter values win when still valid; otherwise URL-param / persisted / default.
+  const getInitialValue = useCallback(
+    (filter) => {
+      const remembered = rememberedView?.filters?.[filterMemoryKey(filter)];
+      return isPersistedValueValid(filter, remembered) ? remembered : getInitialFilterValue(filter);
+    },
+    [rememberedView]
+  );
+
   // Core filter pipeline — useMetadataDrivenFilters owns metadata table fetching, filter option building,
   // FilterContext initialisation, cross-filter correction, and runtime option hiding.
   // `getInitialFilterValue` is passed so map pages pick up URL-param / persisted-state values.
@@ -159,7 +183,30 @@ export const MapProvider = ({ children }) => {
     emptyTables,
     emptyMetadataFilters,
     isReady: filtersReady,
-  } = useMetadataDrivenFilters({ getInitialValue: getInitialFilterValue });
+  } = useMetadataDrivenFilters({ getInitialValue });
+
+  // Remember the camera after each move, for the next visit.
+  useEffect(() => {
+    const map = state.map;
+    if (!rememberView || !map) return undefined;
+    const save = () => {
+      const { lng, lat } = map.getCenter();
+      writeMapView(pageContext.url, { centre: [lng, lat], zoom: map.getZoom() });
+    };
+    map.on("moveend", save);
+    return () => map.off("moveend", save);
+  }, [rememberView, state.map, pageContext.url]);
+
+  // Remember the filter values, keyed so they match the same filters on the next visit.
+  const filterState = useContext(FilterContext)?.state;
+  useEffect(() => {
+    if (!rememberView || !filtersReady || !filterState) return;
+    const filters = {};
+    filtersWithIds.forEach((f) => {
+      if (f.id in filterState) filters[filterMemoryKey(f)] = filterState[f.id];
+    });
+    writeMapView(pageContext.url, { filters });
+  }, [rememberView, filtersReady, filterState, filtersWithIds, pageContext.url]);
 
   // Initialise layers and visualisations from page config.
   // This is independent of filter init and runs immediately on page change.
