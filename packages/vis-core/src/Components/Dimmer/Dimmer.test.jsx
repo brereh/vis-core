@@ -1,5 +1,5 @@
 import { Dimmer } from "Components/Dimmer";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 
 describe("Dimmer loader tester", () => {
   it("displays both the spinner and dimmed overlay when dimmed and showLoader are true", () => {
@@ -47,6 +47,50 @@ describe("Dimmer loader tester", () => {
       height: '100%',
       top: '0',
       left: '0'
+    });
+  });
+
+  describe("after the first load", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    const finishFirstLoad = () => {
+      const view = render(<Dimmer dimmed showLoader />);
+      view.rerender(<Dimmer dimmed={false} showLoader />);
+      act(() => jest.advanceTimersByTime(400));
+      return view;
+    };
+
+    it("shows only the thin bar for a load quicker than the delay", () => {
+      const { rerender } = finishFirstLoad();
+      rerender(<Dimmer dimmed showLoader />);
+      expect(screen.getByTestId("loading-bar")).toBeInTheDocument();
+      act(() => jest.advanceTimersByTime(200));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      rerender(<Dimmer dimmed={false} showLoader />);
+      act(() => jest.advanceTimersByTime(1000));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("loading-bar")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("dimmed-overlay")).not.toBeInTheDocument();
+    });
+
+    it("shows a non-blocking pill, without the overlay, for a slower load", () => {
+      const { rerender } = finishFirstLoad();
+      rerender(<Dimmer dimmed showLoader />);
+      act(() => jest.advanceTimersByTime(350));
+      expect(screen.getByRole("status")).toHaveTextContent("Updating…");
+      expect(screen.queryByTestId("dimmed-overlay")).not.toBeInTheDocument();
+    });
+
+    it("keeps a shown pill for the minimum time", () => {
+      const { rerender } = finishFirstLoad();
+      rerender(<Dimmer dimmed showLoader />);
+      act(() => jest.advanceTimersByTime(350));
+      rerender(<Dimmer dimmed={false} showLoader />);
+      act(() => jest.advanceTimersByTime(100));
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      act(() => jest.advanceTimersByTime(400));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
   });
 });

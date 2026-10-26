@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styled, { keyframes } from "styled-components";
 
 const Dimmed = styled.div.attrs({ 'data-testid': 'dimmed-overlay' })`
@@ -14,16 +14,20 @@ const Dimmed = styled.div.attrs({ 'data-testid': 'dimmed-overlay' })`
   background-color: #000;
 `;
 
-const pulseProgress = keyframes`
-  0% {
-    width: 20%;
+// Indeterminate progress: a segment slides across the track at a steady pace, so it never looks
+// as if progress is going backwards.
+const slide = keyframes`
+  from {
+    transform: translateX(-100%);
   }
-  50% {
-    width: 82%;
+  to {
+    transform: translateX(250%);
   }
-  100% {
-    width: 55%;
-  }
+`;
+
+const breathe = keyframes`
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 `;
 
 const CenteredLoader = styled.div`
@@ -64,22 +68,75 @@ const ProgressTrack = styled.div`
 `;
 
 const ProgressFill = styled.div`
+  width: 40%;
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, #00dec6 0%, #0d0f3d 100%);
-  animation: ${pulseProgress} 2s ease-in-out infinite;
+  animation: ${slide} 1.4s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    width: 100%;
+    animation: ${breathe} 2s ease-in-out infinite;
+  }
+`;
+
+// Non-blocking indicator for reloads after the first: a small pill at the top of the window that
+// leaves the page usable, instead of dimming everything.
+const UpdatingPill = styled.div`
+  position: fixed;
+  top: calc(var(--app-navbar-height, 75px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  color: #0d0f3d;
+  pointer-events: none;
+`;
+
+// Thin bar under the navbar, shown at once for every later load: an unobtrusive sign that
+// something is happening, even for loads too quick to warrant the pill.
+const TopBar = styled.div.attrs({ 'data-testid': 'loading-bar' })`
+  position: fixed;
+  top: var(--app-navbar-height, 75px);
+  left: 0;
+  right: 0;
+  z-index: 999999;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(0, 222, 198, 0.15);
+  pointer-events: none;
+`;
+
+const PillTrack = styled(ProgressTrack)`
+  width: 64px;
+  height: 4px;
 `;
 
 /**
- * Dimmer is a React component that renders a dimming overlay and an optional loader card.
- * It is typically used to indicate loading or processing states in an application.
- * 
+ * Dimmer shows that a page is loading, without getting in the way more than it needs to.
+ *
+ * - The first load after mount blocks: a dimming overlay and a centred loader card, shown at once.
+ * - Later loads (a filter change, a layer refresh) don't block. A thin bar under the navbar shows
+ *   at once; a small "Updating" pill joins it if the load lasts longer than `showDelay`. There is
+ *   no overlay, so the page stays usable.
+ * - Each indicator stays at least `minVisible` once shown, so quick loads don't flicker.
+ *
  * @component
- * @property {boolean} dimmed - Flag indicating whether the dimming overlay should be displayed.
- * @property {boolean} showLoader - Flag indicating whether the loader spinner should be displayed.
- * @property {string} [statusHeading] - Optional heading above the progress bar.
- * @property {string[]} [statusMessages] - Optional rotating status messages.
- * @returns {JSX.Element|null} The rendered Dimmer component or null if not dimmed.
+ * @property {boolean} dimmed - Whether the page is loading.
+ * @property {boolean} showLoader - Whether to show the loader card (first load) or pill (later loads).
+ * @property {string} [statusHeading] - Heading on the first-load card.
+ * @property {string[]} [statusMessages] - Messages that rotate on the first-load card.
+ * @property {number} [showDelay=300] - Milliseconds a later load must last before it shows.
+ * @property {number} [minVisible=400] - Milliseconds a shown indicator stays at least.
+ * @property {string} [updatingText="Updating…"] - Text in the later-load pill.
+ * @returns {JSX.Element|null} The overlay, the pill, or null.
  */
 export const Dimmer = ({
   dimmed,
@@ -90,6 +147,9 @@ export const Dimmer = ({
     "Almost there, thanks for waiting.",
     "Finalising layers and styles...",
   ],
+  showDelay = 300,
+  minVisible = 400,
+  updatingText = "Updating…",
 }) => {
   const safeMessages = useMemo(
     () => (Array.isArray(statusMessages) && statusMessages.length > 0
@@ -99,23 +159,90 @@ export const Dimmer = ({
   );
   const [messageIndex, setMessageIndex] = useState(0);
 
+  // The first load blocks; once a load has finished, later ones don't.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(!dimmed);
+  // What is on screen, which lags `dimmed` by showDelay (later loads) and minVisible.
+  const [visible, setVisible] = useState(Boolean(dimmed));
+  const shownAtRef = useRef(dimmed ? Date.now() : 0);
+  // Later loads: the top bar shows at once and stays at least minVisible.
+  const [barVisible, setBarVisible] = useState(false);
+  const barShownAtRef = useRef(0);
+
   useEffect(() => {
-    if (!dimmed || !showLoader || safeMessages.length < 2) return undefined;
+    if (!hasLoadedOnce) return undefined;
+    if (dimmed && !barVisible) {
+      barShownAtRef.current = Date.now();
+      setBarVisible(true);
+      return undefined;
+    }
+    if (!dimmed && barVisible) {
+      const remaining = Math.max(0, minVisible - (Date.now() - barShownAtRef.current));
+      const timer = setTimeout(() => setBarVisible(false), remaining);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [dimmed, barVisible, hasLoadedOnce, minVisible]);
+
+  useEffect(() => {
+    let timer;
+    if (dimmed && !visible) {
+      const delay = hasLoadedOnce ? showDelay : 0;
+      timer = setTimeout(() => {
+        shownAtRef.current = Date.now();
+        setVisible(true);
+      }, delay);
+    } else if (!dimmed && visible) {
+      const remaining = Math.max(0, minVisible - (Date.now() - shownAtRef.current));
+      timer = setTimeout(() => {
+        setVisible(false);
+        setHasLoadedOnce(true);
+      }, remaining);
+    } else if (!dimmed && !hasLoadedOnce) {
+      setHasLoadedOnce(true);
+    }
+    return () => clearTimeout(timer);
+  }, [dimmed, visible, hasLoadedOnce, showDelay, minVisible]);
+
+  const blocking = !hasLoadedOnce;
+
+  useEffect(() => {
+    if (!visible || !blocking || !showLoader || safeMessages.length < 2) return undefined;
 
     const intervalId = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % safeMessages.length);
     }, 1800);
 
     return () => clearInterval(intervalId);
-  }, [dimmed, showLoader, safeMessages]);
+  }, [visible, blocking, showLoader, safeMessages]);
 
   useEffect(() => {
-    if (!dimmed) {
+    if (!visible) {
       setMessageIndex(0);
     }
-  }, [dimmed]);
+  }, [visible]);
 
-  if (!dimmed) {
+  if (!blocking) {
+    if (!showLoader) return null;
+    return (
+      <>
+        {barVisible && (
+          <TopBar aria-hidden="true">
+            <ProgressFill />
+          </TopBar>
+        )}
+        {visible && (
+          <UpdatingPill role="status" aria-live="polite">
+            {updatingText}
+            <PillTrack>
+              <ProgressFill role="progressbar" aria-valuetext={updatingText} />
+            </PillTrack>
+          </UpdatingPill>
+        )}
+      </>
+    );
+  }
+
+  if (!visible) {
     return null;
   }
 
@@ -124,7 +251,7 @@ export const Dimmer = ({
   return (
     <>
       {showLoader ? (
-        <CenteredLoader>
+        <CenteredLoader role="status" aria-live="polite">
           <LoaderCard>
             <LoaderHeading>{statusHeading}</LoaderHeading>
             <LoaderMessage>{currentMessage}</LoaderMessage>
