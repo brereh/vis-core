@@ -1059,6 +1059,15 @@ const Map = (props) => {
         if (filter) {
           const value = feature.properties[filter.field];
 
+          // Other layers' map-click filters on the same parameter hold an older selection. Clear
+          // them, or the debounced action pass re-applies their stale value after this one and
+          // the selection jumps back (and a remembered map view would restore it).
+          mapFilters
+            .filter((f) => f.id !== filter.id && f.paramName && f.paramName === filter.paramName)
+            .forEach((f) => {
+              filterDispatch({ type: "SET_FILTER_VALUE", payload: { filterId: f.id, value: null } });
+            });
+
           // Dispatch the action with the value from the clicked feature
           filterDispatch({
             type: "SET_FILTER_VALUE",
