@@ -130,9 +130,10 @@ describe("side-by-side hover", () => {
     expect(popupOn(maps.left).lngLat).toEqual(LNG_LAT);
     expect(popupOn(maps.right).lngLat).toEqual(LNG_LAT);
     expect(tooltipName(maps.left)).toBe("Leeds");
-    expect(tooltipValue(maps.left)).toBe("12");
+    // Values are formatted as on the single map (plan §2.2(1)).
+    expect(tooltipValue(maps.left)).toBe(formatNumber(12));
     expect(tooltipName(maps.right)).toBe("Leeds");
-    expect(tooltipValue(maps.right)).toBe("34");
+    expect(tooltipValue(maps.right)).toBe(formatNumber(34));
   });
 
   it("marks the hovered feature on each pane", () => {

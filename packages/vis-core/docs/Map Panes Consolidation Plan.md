@@ -63,6 +63,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
 10. **Inconsistent popup options:** `closeOnMove`, `closeOnClick`, and whether the layer-click handler is skipped on touch devices.
+11. **Dual tooltips stay up after the pointer leaves the map.** The single map clears its tooltip and hover state when the pointer leaves the canvas. Dual only cancels the pending hover pass, so both tooltips stay where they were. Both components also registered a `handleLayerLeave` that never did anything, because the hover id it reads was never set. (Found in Phase 1, which deleted the dead handlers. Phase 3's shared hover hook clears both panes on leave.)
 
 ### 2.3 Dual mode is guessed from strings
 
@@ -395,6 +396,23 @@ Behaviour pinned so later phases keep it:
 - Fix `useDualMaps` items 2–4 now, as small commits, because they are independent of the restructure.
 
 *Exit:* both components are thinner, each module has its own unit tests, and fixes 1–4 are flipped.
+
+**Phase 1 result.** Full suite: 109 suites and 836 tests, all passing. Fixes 1–4 are flipped, which leaves 9 known-drift tests for Phases 2 and 3.
+
+- **Shared modules:**
+  - `src/map/mapSetup.js`: construction options, `transformRequest`, style resolution, attribution text, base-source registration
+  - `src/map/interactions/tooltipContent.js`: hoverable layers, hit box, tooltip HTML, custom-tooltip fetch and merge, layer-click HTML
+  - `src/map/interactions/hoverTooltip.js`: per-map hover session, hover state, popup, delayed fetch with stale-response guard
+  - `labelLayers.js`, `featureFocus.js`, `selectionHighlight.js`
+
+  Each has its own unit tests against the fake.
+- **Size:** `Map.jsx` is down from 1,520 to about 780 lines, and `DualMaps.jsx` from 1,115 to about 450.
+- **Unchanged on purpose:** the single map's map-click selection (per-layer `selected` state) is left alone until Phase 3 unifies map-click filters. Popup options and touch handling stay per component until Phase 3.
+- **Small differences that come with sharing the code:**
+  - On dual maps, features without an id are no longer considered for tooltips; they can't carry hover state anyway.
+  - A hit box with a non-finite point is skipped rather than queried.
+  - OS tile URLs are normalised with `URL.href`, which gives the same string as `new Request(url).url`.
+- **Test changes:** one existing `DualMaps.test` case stubbed `project()` to return `true`. It now returns a screen point, with its assertion unchanged. The dual hover characterisation now expects the single map's number formatting.
 
 ### Phase 2: Pane-keyed state
 - Add `resolveMapGrid`, `resolveFilterPanes`, `SET_MAP_GRID`, `paneOverrides`, `paneData`, `mapsByPane`, the selectors and `applyVisualisationParam`.
