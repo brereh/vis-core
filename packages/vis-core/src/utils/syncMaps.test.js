@@ -1,22 +1,10 @@
 import { syncMaps } from "utils/syncMaps";
 import { createFakeMap } from "testing/mapLibreFake";
 
-/**
- * MapLibre fires "move" while a camera change is applied, including changes made with
- * jumpTo. The fake doesn't, so make it, otherwise the loop guard isn't exercised.
- */
-const firingMoveOnJump = (map) => {
-  const jump = map.jumpTo.getMockImplementation();
-  map.jumpTo.mockImplementation((view) => {
-    jump(view);
-    map.fire("move");
-    return map;
-  });
-  return map;
-};
-
+// The fake fires "move" on every camera change, as MapLibre does, so the loop guard in
+// syncMaps is exercised for real.
 const createSyncableMaps = (count) =>
-  Array.from({ length: count }, (_, i) => firingMoveOnJump(createFakeMap({ name: `map${i}` })));
+  Array.from({ length: count }, (_, i) => createFakeMap({ name: `map${i}` }));
 
 const moveTo = (map, view) => {
   map.jumpTo(view);

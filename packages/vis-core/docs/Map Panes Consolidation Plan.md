@@ -59,7 +59,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
    - the maps never see those updates
    - callout cards and `DynamicLegend` (which read `state.visualisations`) never see per-side params or data
 6. **Stale maps on navigation.** `RESET_CONTEXT` doesn't clear `map` or `maps`, and `PageSwitch` keeps the same `MapProvider` mounted for both layouts. Navigating from a dual page to a single page appears to leave `MapLayerSection` and `useLayerZoomMessage` reading removed maps.
-7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`. Tile layers are protected by the `getSource` check. GeoJSON layers aren't: both instances pass the check before their async fetch returns, so each GeoJSON layer is fetched twice and `addSource` is called twice on each map (MapLibre throws on the second). Unmounting either instance also tears the layer down on both maps.
+7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`. Tile layers are protected by the `getSource` check. GeoJSON layers aren't: both instances pass the check before their async fetch returns, so each GeoJSON layer is fetched twice for each map (four requests on a dual page) and `addSource` is called twice on each map (MapLibre throws on the second). Unmounting either instance also tears the layer down on both maps, even though the other instance still shows it.
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
 10. **Inconsistent popup options:** `closeOnMove`, `closeOnClick`, and whether the layer-click handler is skipped on touch devices.
@@ -360,14 +360,16 @@ Every phase keeps the full suite green and is releasable as a beta on its own. P
 ### Phase 0: Safety net
 - Install and run the baseline suite, and record the result in the PR.
 - Add characterisation tests for the dual behaviours in §2.4 that aren't already pinned, such as per-side params in the reducer, combined classification, popups on both maps and `separateSidePaths`.
-- Add `it.failing` tests for the bugs in §2.2(1)–(8). Later phases flip them to passing.
-- Build a shared test helper, `test/mockMapLibre.js`, out of the duplicated mocks in `Map.test` and `DualMaps.test`.
+- Add `test.failing` tests for the bugs in §2.2(1)–(8). Later phases flip them to passing.
+- Build a shared MapLibre fake, `src/testing/mapLibreFake.js`, to replace the duplicated mocks in `Map.test` and `DualMaps.test`.
 
 *Exit:* green, with the bug inventory checked into the tests.
 
-**Phase 0 result.** The baseline before Phase 0 was 96 suites and 700 tests, all passing. After it: 103 suites and 753 tests, all passing, including 15 known-drift tests marked `test.failing`. Each known-drift test was also run as an ordinary test to confirm it fails on its assertion rather than its setup.
+**Phase 0 result.** The baseline before Phase 0 was 96 suites and 700 tests, all passing. After it: 103 suites and 761 tests, all passing, including 16 known-drift tests marked `test.failing`. The preconditions those tests rely on are pinned by ordinary tests alongside them. Each known-drift test was also run as an ordinary test to confirm it fails on its assertion rather than its setup.
 
-- **Shared fake:** `src/testing/mapLibreFake.js` is an in-memory map with real event dispatch, layers, sources, feature state and camera, plus `FakePopup` and a module mock. `Map.test` and `DualMaps.test` use it. Its spies are created per call, because the jest config sets `resetMocks`.
+- **Shared fake:** `src/testing/mapLibreFake.js` is an in-memory map with real event dispatch, layers, sources, feature state and camera, plus `FakePopup` and a module mock. As in MapLibre, camera changes fire `move` events and duplicate layers are reported as errors. `resetMapLibreFake()` clears its static records, and its spies are created per call, because the jest config sets `resetMocks`. The header lists the remaining fidelity gaps.
+- **Browser environment:** `src/testing/browserEnv.js` (`useMapBrowserEnv`) installs `matchMedia`, `ResizeObserver` and, optionally, immediate animation frames for a test file, and restores them afterwards.
+- **Not yet migrated:** `Map.test` and `DualMaps.test` use only the fake's module mock and popup. Their hand-built per-test map stubs stay until Phase 3 re-expresses them against `MapPane`. `setupTests.js` also keeps its own `maplibre-gl` mock for the other suites.
 - **Probes:** each new test file reaches state and panes only through a few probe helpers at the top of the file. Later phases change the probes, not the assertions.
 
 | Bug (§2.2) | Known-drift test | Flips in |
@@ -376,12 +378,13 @@ Every phase keeps the full suite green and is releasable as a beta on its own. P
 | (2) no auth header, (3) style function, (4) maps never removed or unsynced | `hooks/mapInstance.test.jsx` | Phase 1 |
 | (5) changes after load don't reach the panes | `reducers/mapReducer.panes.test.js` | Phase 2 |
 | (6) `RESET_CONTEXT` keeps the maps | `reducers/mapReducer.panes.test.js` | Phase 2 |
-| (7) GeoJSON layers fetched and added twice | `MapLayout/Layer.panes.test.jsx` | Phase 3 |
+| (7) GeoJSON layers fetched and added twice per map; one pane's teardown removes the layer from both | `MapLayout/Layer.panes.test.jsx` | Phase 3 |
 | (8) card stack rendered twice | `MapLayout/DualMaps.panes.test.jsx` | Phase 3 |
 
 Behaviour pinned so later phases keep it:
 - `syncMaps`: any number of maps, both directions, no echo, unsubscribe (`utils/syncMaps.test.js`)
 - per-side query and path params, and per-side data (`reducers/mapReducer.panes.test.js`)
+- per-side tile paths for layers with `separateSidePaths` (`MapLayout/Layer.panes.test.jsx`)
 - classification over the combined data, with each pane painted from its own data (`MapLayout/MapVisualisation.panes.test.jsx`)
 - hover tooltips, hover state and layer-click popups on both panes (`MapLayout/DualMaps.panes.test.jsx`)
 - `useMap`'s auth header, default style and teardown (`hooks/mapInstance.test.jsx`)

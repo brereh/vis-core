@@ -203,12 +203,18 @@ describe("known drift (plan §2.2(5)): changes after load reach the panes", () =
   });
 });
 
+describe("registered maps", () => {
+  it("are recorded for a side-by-side page", () => {
+    const state = registerDualMaps(withVisualisation(), { name: "left" }, { name: "right" });
+    expect(registeredMaps(state).map((map) => map.name)).toEqual(
+      expect.arrayContaining(["left", "right"])
+    );
+  });
+});
+
 describe("known drift (plan §2.2(6)): page reset forgets the maps", () => {
   test.failing("RESET_CONTEXT leaves no map registered", () => {
-    let state = withVisualisation();
-    state = registerDualMaps(state, { name: "left" }, { name: "right" });
-    expect(registeredMaps(state)).not.toHaveLength(0);
-
+    let state = registerDualMaps(withVisualisation(), { name: "left" }, { name: "right" });
     state = mapReducer(state, { type: actionTypes.RESET_CONTEXT });
 
     expect(registeredMaps(state)).toEqual([]);
