@@ -21,6 +21,9 @@ import { useFetchVisualisationData } from "hooks/useFetchVisualisationData";
 import { useFeatureStateUpdater } from "hooks/useFeatureStateUpdater";
 import { useVisualisationLoadingCounter } from "hooks/useVisualisationLoadingCounter"; // Import the custom hook
 import { registerMapRestorer } from "../../map/runtimeRestorationRegistry";
+import { SINGLE_PANE_ID } from "../../map/resolveMapGrid";
+import { selectClassificationPanes, selectPaneData } from "../../reducers/mapSelectors";
+import { usePaneVisualisation, useShallowStableArray } from "hooks/usePaneVisualisation";
 import { defaultMapColourMapper } from "defaults";
 import { DataFetchState } from "enums";
 
@@ -176,17 +179,17 @@ const buildSelectedCategoricalColourOverrides = ({
  * @param {Object} props - The properties passed to the component.
  * @param {string} props.visualisationName - The name of the visualisation.
  * @param {Object} props.map - The Maplibre JS map instance.
- * @param {boolean|null} props.left - A boolean indicating whether the visualisation is for the left or the right map. Null for a single map page.
- * @param {Object[]} [props.maps] - An array containing the left and right map instances for side-by-side maps.
+ * @param {string} [props.paneId] - The map pane this draws on. Defaults to the page's primary
+ *   (on a single-map page, only) pane.
  * @returns {null} This component doesn't render anything directly.
  */
 export const MapVisualisation = ({
   visualisationName,
   map,
-  left = null,
-  maps,
+  paneId: paneIdProp,
 }) => {
   const { state, dispatch } = useMapContext();
+  const paneId = paneIdProp ?? state.mapGrid?.primaryPaneId ?? SINGLE_PANE_ID;
   const appContext = useContext(AppContext);
 
   // The page this visualisation belongs to. Hoisted to component scope because both the
@@ -221,13 +224,8 @@ export const MapVisualisation = ({
 
   const { addFeaturesToMap, replayLayerState } = useFeatureStateUpdater();
 
-  // Determine the visualisation based on side (left, right, or single)
-  const visualisation = useMemo(() => {
-    if (left === null) return state.visualisations[visualisationName];
-    return left
-      ? state.leftVisualisations[visualisationName]
-      : state.rightVisualisations[visualisationName];
-  }, [left, state.visualisations, state.leftVisualisations, state.rightVisualisations, visualisationName]);
+  // The visualisation as this pane draws it: the page's copy with the pane's own params.
+  const visualisation = usePaneVisualisation(state, paneId, visualisationName);
 
   // Initialise resolved style when visualisation changes
   useEffect(() => {
@@ -423,36 +421,30 @@ export const MapVisualisation = ({
     if (!isLoading && visualisationData) {
       dispatch({
         type: actionTypes.UPDATE_ALL_DATA,
-        payload: { visualisationName, data: visualisationData, left },
+        payload: { visualisationName, data: visualisationData, paneId },
       });
     }
-  }, [visualisationData, dispatch, visualisationName, isLoading, left]);
+  }, [visualisationData, dispatch, visualisationName, isLoading, paneId]);
 
-  // Compute combined data from both left and right visualisations using useMemo (if DualMaps).
-  // Always resolves to an array: this feeds reclassifyData, which iterates the records to
-  // build bins. An unrecognised (non-array) response shape must degrade to "no data" rather
-  // than throwing, so the map falls back to its default style instead of crashing the page.
+  // The data this pane's colour classes are computed from: its own fresh data, plus the last
+  // data of the other panes it shares classification with (so their colours compare).
+  // Always an array: this feeds reclassifyData, which iterates the records to build bins. An
+  // unrecognised (non-array) response shape must degrade to "no data" rather than throwing,
+  // so the map falls back to its default style instead of crashing the page.
+  const classificationPanes = selectClassificationPanes(state, visualisationName, paneId);
+  const otherPanesData = useShallowStableArray(
+    classificationPanes
+      .filter((id) => id !== paneId)
+      .map((id) => selectPaneData(state, id, visualisationName))
+  );
   const combinedData = useMemo(() => {
-    if (left === null) {
-      return toClassifiableArray(visualisationData, visualisationName);
-    }
-
-    const leftData = toClassifiableArray(
-      state.leftVisualisations[visualisationName]?.data,
-      visualisationName
-    );
-    const rightData = toClassifiableArray(
-      state.rightVisualisations[visualisationName]?.data,
-      visualisationName
-    );
-    return [...leftData, ...rightData];
-  }, [
-    left,
-    state.leftVisualisations,
-    state.rightVisualisations,
-    visualisationData,
-    visualisationName,
-  ]);
+    const own = toClassifiableArray(visualisationData, visualisationName);
+    if (otherPanesData.length === 0) return own;
+    return [
+      ...own,
+      ...otherPanesData.flatMap((data) => toClassifiableArray(data, visualisationName)),
+    ];
+  }, [visualisationData, otherPanesData, visualisationName]);
 
   /**
    * Reclassifies the provided data and updates the map style for a specified layer.

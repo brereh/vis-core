@@ -1,5 +1,6 @@
 import { actionTypes, mapReducer } from "./mapReducer";
 import { DisplayMode, DEFAULT_DISPLAY_MODE } from "enums";
+import { resolveMapGrid } from "../map/resolveMapGrid";
 
 describe("mapReducer categorical legend cache", () => {
   it("registers categorical legend entries without replacing the existing cache", () => {
@@ -281,6 +282,8 @@ describe("mapReducer UPDATE_PARAMETERISED_LAYER with separateSidePaths", () => {
   const template =
     "/api/norms/vectortiles/links/{z}/{x}/{y}?network_spec={network_spec}&year={year}";
   const initialState = {
+    // A side-by-side page whose panes both show the layer.
+    mapGrid: resolveMapGrid({ type: "DualMapLayout", config: { layers: [{ name: "links" }] } }),
     layers: {
       links: {
         name: "links",
@@ -301,10 +304,10 @@ describe("mapReducer UPDATE_PARAMETERISED_LAYER with separateSidePaths", () => {
     const state = update(initialState, "network_spec", "A", "left");
     const layer = state.layers.links;
 
-    expect(layer.sidePaths.left).toContain("network_spec=A");
-    expect(layer.sidePaths.right).toContain("network_spec={network_spec}");
+    expect(layer.panePaths.left).toContain("network_spec=A");
+    expect(layer.panePaths.right).toContain("network_spec={network_spec}");
     expect(layer.path).toBe(template);
-    expect(layer.sideMissingParams).toEqual({
+    expect(layer.paneMissingParams).toEqual({
       left: ["year"],
       right: ["network_spec", "year"],
     });
@@ -323,8 +326,8 @@ describe("mapReducer UPDATE_PARAMETERISED_LAYER with separateSidePaths", () => {
     const layer = state.layers.links;
 
     expect(layer.missingParams).toEqual([]);
-    expect(layer.sidePaths.left).toContain("network_spec=A&year=2030");
-    expect(layer.sidePaths.right).toContain("network_spec=B&year=2030");
+    expect(layer.panePaths.left).toContain("network_spec=A&year=2030");
+    expect(layer.panePaths.right).toContain("network_spec=B&year=2030");
   });
 
   it("applies a later shared filter change to both sides and to layer.path", () => {
@@ -334,8 +337,24 @@ describe("mapReducer UPDATE_PARAMETERISED_LAYER with separateSidePaths", () => {
     state = update(state, "year", "2040", "both");
     const layer = state.layers.links;
 
-    expect(layer.sidePaths.left).toContain("network_spec=A&year=2040");
-    expect(layer.sidePaths.right).toContain("network_spec=B&year=2040");
+    expect(layer.panePaths.left).toContain("network_spec=A&year=2040");
+    expect(layer.panePaths.right).toContain("network_spec=B&year=2040");
     expect(layer.path).toContain("year=2040");
+  });
+
+  it("takes the panes from the payload, as page filters now send them", () => {
+    const state = mapReducer(initialState, {
+      type: actionTypes.UPDATE_PARAMETERISED_LAYER,
+      payload: { targetLayer: "links", filter: { paramName: "network_spec" }, value: "B", panes: ["right"] },
+    });
+    expect(state.layers.links.panePaths.right).toContain("network_spec=B");
+    expect(state.layers.links.panePaths.left).toContain("network_spec={network_spec}");
+  });
+
+  it("accepts the separatePanePaths spelling of the option", () => {
+    const links = { ...initialState.layers.links, separateSidePaths: undefined, separatePanePaths: true };
+    const state = update({ ...initialState, layers: { links } }, "network_spec", "A", "left");
+    expect(state.layers.links.panePaths.left).toContain("network_spec=A");
+    expect(state.layers.links.panePaths.right).toContain("network_spec={network_spec}");
   });
 });

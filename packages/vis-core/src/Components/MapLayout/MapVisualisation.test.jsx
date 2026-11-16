@@ -285,7 +285,8 @@ describe("Updating data with UPDATE_ALL_DATA", () => {
       payload: {
         visualisationName: "visualisationName",
         data: ["firstELement"],
-        left: null,
+        // On a single-map page the visualisation draws on the only pane.
+        paneId: "main",
       },
     });
   });
@@ -513,11 +514,11 @@ describe("customBandsHasChanged triggers reclassification", () => {
   });
 });
 
-describe("the props left is equal to true", () => {
+describe("drawing on the left pane", () => {
   beforeEach(() => {
     props = {
       ...props,
-      left: true,
+      paneId: "left",
     };
 
     useFetchVisualisationData.mockReturnValue({
@@ -588,7 +589,7 @@ describe("MapVisualisation restoration registration", () => {
     expect(cleanupSpy).toHaveBeenCalled();
   });
 
-  it("registers left and right map instances independently", () => {
+  it("registers the left and right panes' maps independently", () => {
     const leftMap = {
       getLayer: jest.fn(),
       getSource: jest.fn(),
@@ -611,8 +612,8 @@ describe("MapVisualisation restoration registration", () => {
     render(
       <AppContext.Provider value={mockAppContext}>
         <MapContext.Provider value={mockMapContext}>
-          <MapVisualisation visualisationName="visualisationName" map={leftMap} left={true} />
-          <MapVisualisation visualisationName="visualisationName" map={rightMap} left={false} />
+          <MapVisualisation visualisationName="visualisationName" map={leftMap} paneId="left" />
+          <MapVisualisation visualisationName="visualisationName" map={rightMap} paneId="right" />
         </MapContext.Provider>
       </AppContext.Provider>
     );

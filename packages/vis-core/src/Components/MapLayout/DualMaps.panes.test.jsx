@@ -16,6 +16,7 @@ import { FilterContext } from "contexts/FilterContext";
 import { createFakeMap, createFeature, FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
 import { useMapBrowserEnv } from "testing/browserEnv";
 import { formatNumber } from "utils";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("hooks/useDualMaps", () => ({ useDualMaps: jest.fn() }));
@@ -61,8 +62,10 @@ const baseState = (layerConfig = {}) => ({
     [LAYER]: { name: LAYER, visualisationName: VIS, shouldHaveTooltipOnHover: true, ...layerConfig },
   },
   visualisations: { [VIS]: visualisation, Summary: card },
-  leftVisualisations: { [VIS]: visualisation, Summary: card },
-  rightVisualisations: { [VIS]: visualisation, Summary: card },
+  mapGrid: resolveMapGrid({ type: "DualMapLayout", config: { visualisations: [visualisation, card] } }),
+  mapsByPane: {},
+  paneOverrides: {},
+  paneData: {},
   mapBoundsAndCentroid: null,
 });
 

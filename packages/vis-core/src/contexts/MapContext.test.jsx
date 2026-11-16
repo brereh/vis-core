@@ -241,3 +241,31 @@ describe("parameterisedLayers for each layer", () => {
     expect(mockDispatch).toHaveBeenCalled();
   });
 });
+
+describe("map grid", () => {
+  beforeEach(() => {
+    mockUseReducer.mockReturnValue([{}, mockDispatch]);
+  });
+
+  it.each([
+    ["MapLayout", ["main"]],
+    ["DualMapLayout", ["left", "right"]],
+  ])("sets the panes of a %s page", (type, paneIds) => {
+    render(
+      <PageContext.Provider value={{ ...mockPageContext, type }}>
+        <AppContext.Provider value={mockAppContexte}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <MapProvider>
+              <p>ImAChildren</p>
+            </MapProvider>
+          </FilterContext.Provider>
+        </AppContext.Provider>
+      </PageContext.Provider>
+    );
+
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: "SET_MAP_GRID",
+      payload: expect.objectContaining({ paneIds }),
+    });
+  });
+});

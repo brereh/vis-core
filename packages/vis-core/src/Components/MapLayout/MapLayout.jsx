@@ -116,13 +116,9 @@ export const MapLayout = () => {
           // Use getInitialFilterValue to get persisted state or default value
           let defaultValue = getInitialFilterValue(filter);
 
-          let sides = "";
-          if (filter.filterName.includes("Left")) sides = "left";
-          else if (filter.filterName.includes("Right")) sides = "right";
-          else sides = "both";
           dispatch({
             type: actionObj.action,
-            payload: { filter, value: defaultValue, sides: sides, ...actionObj.payload },
+            payload: { filter, value: defaultValue, panes: filter.panes, ...actionObj.payload },
           });
         });
       });
@@ -171,14 +167,13 @@ export const MapLayout = () => {
    * @param {Object} filter - The filter configuration object triggering the action.
    * @param {Object} action - The action definition, including its base `payload` and action type (e.g., `UPDATE_COLOR_SCHEME`).
    * @param {any|any[]} value - The currently selected value(s) for the filter.
-   * @param {string[]} [sides] - Optional list of panel sides the action applies to, used in dual-map layouts.
-   * @returns {Object} The enriched payload containing the filter, selected value(s), original action payload parameters, and potentially resolved colour schemes.
+   * @returns {Object} The enriched payload containing the filter, selected value(s), the map
+   *   panes the filter targets, original action payload parameters, and potentially resolved
+   *   colour schemes.
    */
-  const buildFilterActionPayload = useCallback((filter, action, value, sides) => {
+  const buildFilterActionPayload = useCallback((filter, action, value) => {
     const selectedOptions = getSelectedFilterOptions(filter, value);
-    const payload = { filter, value, ...action.payload };
-
-    if (sides) payload.sides = sides;
+    const payload = { filter, value, panes: filter.panes, ...action.payload };
 
     if (action.action === "UPDATE_COLOR_SCHEME") {
       const colourValue = selectedOptions.find((option) => option.colourValue)?.colourValue;
@@ -335,40 +330,27 @@ export const MapLayout = () => {
    * the UI updates dependent dropdown options immediately, while map/API work waits until
    * the user has stopped changing filters.
    */
+  const isMultiPane = (state.mapGrid?.paneIds?.length ?? 1) > 1;
+
   useEffect(() => {
     if (isFiltersDebouncing) return;
 
     state.filters.forEach((filter) => {
       const filterValue = debouncedFilterState[filter.id];
 
-      if (!filter.visualisations?.[0]?.includes("Side")) {
-        filter.actions.forEach((action) => {
-          dispatch({
-            type: action.action,
-            payload: buildFilterActionPayload(filter, action, filterValue),
-          });
+      // On pages with several map panes, the panes dispatch map-click filters themselves,
+      // each with the feature under the click on its own map. The filter state holds a single
+      // value, so re-dispatching it here would give every pane the same feature.
+      if (filter.type === "map" && isMultiPane) return;
+
+      filter.actions.forEach((action) => {
+        dispatch({
+          type: action.action,
+          payload: buildFilterActionPayload(filter, action, filterValue),
         });
-      } else {
-        // On dual maps, DualMaps dispatches map-click filters itself, with each side's own
-        // feature. The filter state holds a single value, so re-dispatching it here would
-        // overwrite one side with the other side's feature.
-        if (filter.type === "map") return;
-
-        filter.actions.forEach((action) => {
-          let sides = "";
-
-          if (filter.filterName.includes("Left")) sides = "left";
-          else if (filter.filterName.includes("Right")) sides = "right";
-          else sides = "both";
-
-          dispatch({
-            type: action.action,
-            payload: buildFilterActionPayload(filter, action, filterValue, sides),
-          });
-        });
-      }
+      });
     });
-  }, [debouncedFilterState, state.filters, dispatch, buildFilterActionPayload, isFiltersDebouncing]);
+  }, [debouncedFilterState, state.filters, dispatch, buildFilterActionPayload, isFiltersDebouncing, isMultiPane]);
 
   const handleColorChange = (color, layerName) => {
     dispatch({

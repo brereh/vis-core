@@ -2,44 +2,58 @@
  * Map-pane behaviour of the map reducer: what each pane of a side-by-side page sees.
  *
  * These tests describe behaviour, not state shape. They read and set up state only through
- * the probes below, which know today's left/right layout. When the reducer moves to
- * pane-keyed state (docs/Map Panes Consolidation Plan.md, Phase 2), only the probes change.
- *
- * "known drift" tests use `test.failing`: they state the intended behaviour and fail today
- * because of the bugs listed in §2.2 of the plan. The phase that fixes each bug turns it
- * into an ordinary test.
+ * the probes below. Phase 2 of docs/Map Panes Consolidation Plan.md moved the reducer from
+ * left/right copies to pane-keyed state; only the probes changed, and the known-drift tests
+ * for §2.2(5) and (6) became ordinary tests.
  */
 import { actionTypes, mapReducer } from "./mapReducer";
+import { selectMaps, selectPaneData, selectPaneVisualisation } from "./mapSelectors";
+import { resolveMapGrid } from "../map/resolveMapGrid";
 import { DisplayMode } from "enums";
 
 // --- probes: the only place that knows the state layout ------------------------------
 
 /** The visualisation as the given pane ("left" | "right") draws it. */
-const paneVisualisation = (state, pane, visName) =>
-  pane === "left" ? state.leftVisualisations[visName] : state.rightVisualisations[visName];
+const paneVisualisation = (state, pane, visName) => selectPaneVisualisation(state, pane, visName);
 
 /** The data the given pane holds for a visualisation. */
-const paneData = (state, pane, visName) => paneVisualisation(state, pane, visName)?.data;
+const paneData = (state, pane, visName) => selectPaneData(state, pane, visName);
+
+/** Stores a pane's fetched data, as its MapVisualisation does. */
+const storePaneData = (state, pane, visName, data) =>
+  mapReducer(state, {
+    type: actionTypes.UPDATE_ALL_DATA,
+    payload: { visualisationName: visName, data, paneId: pane },
+  });
 
 /** The map instances registered for the page. */
-const registeredMaps = (state) => [state.map, ...(state.maps ?? [])].filter(Boolean);
+const registeredMaps = (state) => selectMaps(state);
 
 /** Registers maps for a side-by-side page, as DualMaps does once its maps are ready. */
 const registerDualMaps = (state, left, right) => {
-  const withMap = mapReducer(state, { type: actionTypes.SET_MAP, payload: { map: left } });
-  return mapReducer(withMap, { type: actionTypes.SET_DUAL_MAPS, payload: { maps: [left, right] } });
+  const withLeft = mapReducer(state, {
+    type: actionTypes.SET_PANE_MAP,
+    payload: { paneId: "left", map: left },
+  });
+  return mapReducer(withLeft, {
+    type: actionTypes.SET_PANE_MAP,
+    payload: { paneId: "right", map: right },
+  });
 };
 
 // --- helpers ----------------------------------------------------------------------------
 
 const VIS = "Accessibility Side";
 
+/** A side-by-side page showing VIS on both panes. */
 const baseState = () => ({
   filters: [],
   layers: {},
   visualisations: {},
-  leftVisualisations: {},
-  rightVisualisations: {},
+  mapGrid: resolveMapGrid({
+    type: "DualMapLayout",
+    config: { visualisations: [{ name: VIS, type: "joinDataToMap" }] },
+  }),
 });
 
 const withVisualisation = (state = baseState()) =>
@@ -131,14 +145,8 @@ describe("side-by-side panes", () => {
 
   it("stores fetched data per pane", () => {
     let state = withVisualisation();
-    state = mapReducer(state, {
-      type: actionTypes.UPDATE_ALL_DATA,
-      payload: { visualisationName: VIS, data: [{ id: 1, value: 10 }], left: true },
-    });
-    state = mapReducer(state, {
-      type: actionTypes.UPDATE_ALL_DATA,
-      payload: { visualisationName: VIS, data: [{ id: 1, value: 99 }], left: false },
-    });
+    state = storePaneData(state, "left", VIS, [{ id: 1, value: 10 }]);
+    state = storePaneData(state, "right", VIS, [{ id: 1, value: 99 }]);
 
     expect(paneData(state, "left", VIS)).toEqual([{ id: 1, value: 10 }]);
     expect(paneData(state, "right", VIS)).toEqual([{ id: 1, value: 99 }]);
@@ -147,8 +155,8 @@ describe("side-by-side panes", () => {
 
 // --- known drift: intended behaviour that fails today (plan §2.2) ------------------------
 
-describe("known drift (plan §2.2(5)): changes after load reach the panes", () => {
-  test.failing("a legend text change reaches both panes", () => {
+describe("changes after load reach the panes (fixed drift, plan §2.2(5))", () => {
+  test("a legend text change reaches both panes", () => {
     let state = withVisualisation();
     state = mapReducer(state, {
       type: actionTypes.UPDATE_LEGEND_TEXT,
@@ -169,7 +177,7 @@ describe("known drift (plan §2.2(5)): changes after load reach the panes", () =
     ]);
   });
 
-  test.failing("a display mode change reaches both panes", () => {
+  test("a display mode change reaches both panes", () => {
     let state = withVisualisation();
     state = mapReducer(state, {
       type: actionTypes.UPDATE_DISPLAY_MODE,
@@ -180,7 +188,7 @@ describe("known drift (plan §2.2(5)): changes after load reach the panes", () =
     expect(paneVisualisation(state, "right", VIS).displayMode).toBe(DisplayMode.DIFFERENCE);
   });
 
-  test.failing("a query param set by a filter that isn't side-specific reaches both panes", () => {
+  test("a query param set by a filter that isn't side-specific reaches both panes", () => {
     let state = withVisualisation();
     state = mapReducer(state, {
       type: actionTypes.UPDATE_QUERY_PARAMS,
@@ -191,7 +199,7 @@ describe("known drift (plan §2.2(5)): changes after load reach the panes", () =
     expect(queryParam(state, "right", "year")).toBe(2040);
   });
 
-  test.failing("a path param set by a filter that isn't side-specific reaches both panes", () => {
+  test("a path param set by a filter that isn't side-specific reaches both panes", () => {
     let state = withVisualisation();
     state = mapReducer(state, {
       type: actionTypes.UPDATE_PATH_PARAMS,
@@ -212,8 +220,8 @@ describe("registered maps", () => {
   });
 });
 
-describe("known drift (plan §2.2(6)): page reset forgets the maps", () => {
-  test.failing("RESET_CONTEXT leaves no map registered", () => {
+describe("page reset forgets the maps (fixed drift, plan §2.2(6))", () => {
+  test("RESET_CONTEXT leaves no map registered", () => {
     let state = registerDualMaps(withVisualisation(), { name: "left" }, { name: "right" });
     state = mapReducer(state, { type: actionTypes.RESET_CONTEXT });
 

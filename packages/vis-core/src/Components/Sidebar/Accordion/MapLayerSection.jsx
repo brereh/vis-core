@@ -8,6 +8,7 @@ import {
   getApplicationLayerRootId,
 } from "../../../map/applicationLayerIds";
 import { getInitialBaseSources } from "../../../map/baseSources";
+import { selectMaps } from "../../../reducers/mapSelectors";
 
 /**
  * MapLayerSection component represents a section for controlling map layers.
@@ -26,12 +27,11 @@ export const MapLayerSection = ({
   handleCustomBandsChange,
 }) => {
   const { state } = useMapContext();
-  const maps = useMemo(() => {
-    if (Array.isArray(state.maps)) {
-      return state.maps.filter(Boolean);
-    }
-    return [state.map].filter(Boolean);
-  }, [state.maps, state.map]);
+  const maps = useMemo(
+    () => selectMaps(state),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.mapsByPane, state.map, state.mapGrid]
+  );
   const [layers, setLayers] = useState([]);
 
   const updateLayers = useCallback(() => {

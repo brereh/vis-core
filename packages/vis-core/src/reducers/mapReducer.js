@@ -1,61 +1,13 @@
 import { updateUrlParameters, normaliseParamValue, normaliseDisplayMode } from "utils";
 import { getBaseMap } from "../map/baseMaps";
-
-/**
- * Finds the first configured colour scheme value from filter options.
- *
- * Used during map initialisation to infer a starting colour scheme when one
- * is not explicitly set on a visualisation.
- *
- * @param {Array<Object>} filters - State filters that may contain values/values[].colourValue.
- * @returns {Object|null} The first discovered colourValue object, or null if none is found.
- */
-const findFirstColourValue = (filters) => {
-  for (const filter of filters) {
-    if (filter.values && filter.values.values) {
-      for (const valueItem of filter.values.values) {
-        if (valueItem.colourValue) {
-          return valueItem.colourValue;
-        }
-      }
-    }
-  }
-  return null;
-};
-
-/**
- * Updates a params map (queryParams or pathParams) across a set of visualisations.
- *
- * @param {Object} visualisationsMap - The visualisations state slice (e.g., state.visualisations).
- * @param {string[]} visualisationNames - Names of visualisations to update.
- * @param {string} fieldName - The field to update ("queryParams" or "pathParams").
- * @param {string} paramName - The parameter name to update.
- * @param {string|number|Array} newParamValue - The value to set for the parameter.
- * @returns {Object} A new, updated visualisations map with param changes applied.
- */
-function updateParamMap(visualisationsMap, visualisationNames, fieldName, paramName, newParamValue) {
-  const updatedVisualisations = { ...visualisationsMap };
-  visualisationNames.forEach((visName) => {
-    const vis = updatedVisualisations[visName];
-    if (!vis) return;
-
-    const currentParams = vis[fieldName] || {};
-    const isRequired = currentParams[paramName]?.required || false;
-
-    updatedVisualisations[visName] = {
-      ...vis,
-      [fieldName]: {
-        ...currentParams,
-        [paramName]: {
-          value: newParamValue,
-          required: isRequired,
-        },
-      },
-    };
-  });
-
-  return updatedVisualisations;
-}
+import {
+  applyLayerParam,
+  applyPaneData,
+  applyVisualisationParam,
+  removePaneMap,
+  setPaneMap,
+  targetPanes,
+} from "./paneState";
 
 /**
  * Resolves legend text from a rule set based on the selected filter option.
@@ -143,7 +95,9 @@ export const actionTypes = {
   INITIALISE_SIDEBAR: "INITIALISE_SIDEBAR",
   SET_PAGE_INFO: "SET_PAGE_INFO",
   SET_MAP: "SET_MAP",
-  SET_DUAL_MAPS: "SET_DUAL_MAPS",
+  SET_MAP_GRID: "SET_MAP_GRID",
+  SET_PANE_MAP: "SET_PANE_MAP",
+  REMOVE_PANE_MAP: "REMOVE_PANE_MAP",
   ADD_LAYER: "ADD_LAYER",
   ADD_PARAMETERISED_LAYER: "ADD_PARAMETERISED_LAYER",
   UPDATE_PARAMETERISED_LAYER: "UPDATE_PARAMETERISED_LAYER",
@@ -269,8 +223,10 @@ export const mapReducer = (state, action) => {
         customColorSchemeSelectedByLayer: {},
         visualisations: {},
         filters: [],
-        leftVisualisations: {},
-        rightVisualisations: {},
+        map: null,
+        mapsByPane: {},
+        paneOverrides: {},
+        paneData: {},
         isLoading: true,
         visualisationLoadingCount: 0,
         pageIsReady: false,
@@ -334,71 +290,16 @@ export const mapReducer = (state, action) => {
         return state; // Return the current state unmodified
       }
 
-      // Prepare the parameters object for replacement
-      const params = { [paramName]: newParamValue };
-
-      // Opt-in for dual maps: a layer with separateSidePaths keeps a separate path per side,
-      // so a "Left"/"Right" filter only changes the tiles on its own map. Any other filter
-      // (sides "both" or unset) changes both sides, and layer.path for single-map use.
-      const layer = state.layers[layerName];
-      if (layer.separateSidePaths) {
-        const side = action.payload.sides;
-        const isOneSide = side === "left" || side === "right";
-        const targetSides = isOneSide ? [side] : ["left", "right"];
-        const sidePaths = { ...(layer.sidePaths ?? { left: layer.path, right: layer.path }) };
-        const sideMissingParams = {
-          ...(layer.sideMissingParams ?? {
-            left: layer.missingParams || [],
-            right: layer.missingParams || [],
-          }),
-        };
-        targetSides.forEach((target) => {
-          sidePaths[target] = updateUrlParameters(layer.pathTemplate, sidePaths[target], params);
-          sideMissingParams[target] = sideMissingParams[target].filter(
-            (param) => param !== paramName
-          );
-        });
-        return {
-          ...state,
-          layers: {
-            ...state.layers,
-            [layerName]: {
-              ...layer,
-              path: isOneSide
-                ? layer.path
-                : updateUrlParameters(layer.pathTemplate, layer.path, params),
-              sidePaths,
-              sideMissingParams,
-              // The layer is added to both maps once neither side is missing anything.
-              missingParams: [...new Set([...sideMissingParams.left, ...sideMissingParams.right])],
-            },
-          },
-        };
-      }
-
-      // Update the path of the layer with the new parameters
-      const updatedPath = updateUrlParameters(
-        state.layers[layerName].pathTemplate,
-        state.layers[layerName].path,
-        params
-      );
-
-      // Update the missingParams array if it exists
-      const currentMissingParams = state.layers[layerName].missingParams || [];
-      const updatedMissingParams = currentMissingParams.filter(
-        (param) => param !== paramName
-      );
-
-      // Update the layer in the state
       return {
         ...state,
         layers: {
           ...state.layers,
-          [layerName]: {
-            ...state.layers[layerName],
-            path: updatedPath,
-            missingParams: updatedMissingParams,
-          },
+          [layerName]: applyLayerParam(state.layers[layerName], state, {
+            layerName,
+            paramName,
+            value: newParamValue,
+            panes: targetPanes(action.payload),
+          }),
         },
       };
     }
@@ -510,176 +411,44 @@ export const mapReducer = (state, action) => {
       return {
         ...state,
         visualisations: visualisationContent,
-        leftVisualisations: visualisationContent,
-        rightVisualisations: visualisationContent,
       };
     }
 
-    case actionTypes.UPDATE_PATH_PARAMS: {
-      const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
-      const joinStyle = action.payload.joinStyle || action.payload.filter?.joinStyle || "slash";
-      const newParamValue = normaliseParamValue(action.payload.value, joinStyle);
-
-      const updatedVisualisations = updateParamMap(
-        state.visualisations,
-        visualisationNames,
-        "pathParams",
-        paramName,
-        newParamValue
-      );
-
-      return {
-        ...state,
-        visualisations: updatedVisualisations,
-      };
-    }
-
+    // A param set by a filter. `panes` (or the legacy `sides`) says which map panes it
+    // targets; see reducers/paneState.js for where the value is stored. The DUAL_ variants
+    // are kept because page configs name them; they behave the same.
+    case actionTypes.UPDATE_PATH_PARAMS:
     case actionTypes.UPDATE_DUAL_PATH_PARAMS: {
-      const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
       const joinStyle = action.payload.joinStyle || action.payload.filter?.joinStyle || "slash";
-      const newParamValue = normaliseParamValue(action.payload.value, joinStyle);
-
-      // Prepare the target(s) based on sides
-      const targets = (() => {
-        switch (action.payload.sides) {
-          case "left":
-            return [{ ...state.leftVisualisations }];
-          case "right":
-            return [{ ...state.rightVisualisations }];
-          case "both":
-            return [{ ...state.leftVisualisations }, { ...state.rightVisualisations }];
-          default:
-            return [{ ...state.leftVisualisations }];
-        }
-      })();
-
-      // Apply updates to each target pane
-      const updatedTargets = targets.map((visMap) =>
-        updateParamMap(visMap, visualisationNames, "pathParams", paramName, newParamValue)
-      );
-
-      // Return updated state matching requested sides
-      switch (action.payload.sides) {
-        case "left":
-          return { ...state, leftVisualisations: updatedTargets[0] };
-        case "right":
-          return { ...state, rightVisualisations: updatedTargets[0] };
-        case "both":
-          return {
-            ...state,
-            leftVisualisations: updatedTargets[0],
-            rightVisualisations: updatedTargets[1],
-          };
-        default:
-          return { ...state, leftVisualisations: updatedTargets[0] };
-      }
-    }
-
-    case actionTypes.UPDATE_QUERY_PARAMS: {
-      const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
-
-      // For query params, use comma-delimited arrays by default
-      const newParamValue = normaliseParamValue(action.payload.value, "comma");
-
-      const updatedVisualisations = updateParamMap(
-        state.visualisations,
-        visualisationNames,
-        "queryParams",
-        paramName,
-        newParamValue
-      );
-
       return {
         ...state,
-        visualisations: updatedVisualisations,
+        ...applyVisualisationParam(state, {
+          visualisationNames: action.payload.filter.visualisations,
+          panes: targetPanes(action.payload),
+          field: "pathParams",
+          paramName: action.payload.paramName || action.payload.filter.paramName,
+          value: normaliseParamValue(action.payload.value, joinStyle),
+        }),
       };
     }
 
+    case actionTypes.UPDATE_QUERY_PARAMS:
     case actionTypes.UPDATE_DUAL_QUERY_PARAMS: {
-      const visualisationNames = action.payload.filter.visualisations;
-      const paramName = action.payload.paramName || action.payload.filter.paramName;
-
-      // For query params, use comma-delimited arrays by default
-      const newParamValue = normaliseParamValue(action.payload.value, "comma");
-
-      // Prepare the target(s) based on sides
-      const targets = (() => {
-        switch (action.payload.sides) {
-          case "left":
-            return [{ ...state.leftVisualisations }];
-          case "right":
-            return [{ ...state.rightVisualisations }];
-          case "both":
-            return [{ ...state.leftVisualisations }, { ...state.rightVisualisations }];
-          default:
-            return [{ ...state.leftVisualisations }];
-        }
-      })();
-
-      // Apply updates to each target pane
-      const updatedTargets = targets.map((visMap) =>
-        updateParamMap(visMap, visualisationNames, "queryParams", paramName, newParamValue)
-      );
-
-      // Return updated state matching requested sides
-      switch (action.payload.sides) {
-        case "left":
-          return { ...state, leftVisualisations: updatedTargets[0] };
-        case "right":
-          return { ...state, rightVisualisations: updatedTargets[0] };
-        case "both":
-          return {
-            ...state,
-            leftVisualisations: updatedTargets[0],
-            rightVisualisations: updatedTargets[1],
-          };
-        default:
-          return { ...state, leftVisualisations: updatedTargets[0] };
-      }
+      return {
+        ...state,
+        ...applyVisualisationParam(state, {
+          visualisationNames: action.payload.filter.visualisations,
+          panes: targetPanes(action.payload),
+          field: "queryParams",
+          paramName: action.payload.paramName || action.payload.filter.paramName,
+          // Query params use comma-delimited arrays.
+          value: normaliseParamValue(action.payload.value, "comma"),
+        }),
+      };
     }
 
     case actionTypes.UPDATE_ALL_DATA: {
-      const side = action.payload.left;
-      switch (side) {
-        case true: {
-          return {
-            ...state,
-            leftVisualisations: {
-              ...state.leftVisualisations,
-              [action.payload.visualisationName]: {
-                ...state.leftVisualisations[action.payload.visualisationName],
-                data: action.payload.data,
-              },
-            },
-          };
-        }
-        case false: {
-          return {
-            ...state,
-            rightVisualisations: {
-              ...state.rightVisualisations,
-              [action.payload.visualisationName]: {
-                ...state.rightVisualisations[action.payload.visualisationName],
-                data: action.payload.data,
-              },
-            },
-          };
-        }
-        default:
-          return {
-            ...state,
-            visualisations: {
-              ...state.visualisations,
-              [action.payload.visualisationName]: {
-                ...state.visualisations[action.payload.visualisationName],
-                data: action.payload.data,
-              },
-            },
-          };
-      }
+      return { ...state, ...applyPaneData(state, action.payload) };
     }
 
     case actionTypes.SET_DATA_REQUESTED:
@@ -688,23 +457,19 @@ export const mapReducer = (state, action) => {
       case actionTypes.SET_NO_DATA_RETURNED:
         return { ...state, noDataReturned: action.payload };
 
-    case actionTypes.SET_MAP: {
-      const { map } = action.payload;
-      // Attempt to find a colourValue
-      const visualisationName = Object.keys(state.visualisations)[0];
-      let colourValue = findFirstColourValue(state.filters) || state.visualisations[visualisationName].colorValue;
+    case actionTypes.SET_MAP_GRID: {
+      return { ...state, mapGrid: action.payload };
+    }
 
-      // If colourValue is null, default to { value: "YlGnBu", label: "YlGnBu" }
-      if (!colourValue) {
-        colourValue = { value: "YlGnBu", label: "YlGnBu" };
-      }  
+    // Registers a pane's map; SET_MAP registers the primary pane's.
+    case actionTypes.SET_MAP:
+    case actionTypes.SET_PANE_MAP: {
+      const paneId = action.payload.paneId ?? (state.mapGrid?.primaryPaneId ?? "main");
+      return { ...state, ...setPaneMap(state, { paneId, map: action.payload.map }) };
+    }
 
-      return {
-        ...state,
-        map: map, // Store the map instance directly in the state
-        // color_scheme: colourValue, // Use either the found or default colourValue
-        // class_method: "d",
-      };
+    case actionTypes.REMOVE_PANE_MAP: {
+      return { ...state, ...removePaneMap(state, action.payload) };
     }
 
     case actionTypes.SET_BASE_MAP: {
@@ -717,24 +482,6 @@ export const mapReducer = (state, action) => {
       };
     }
 
-    case actionTypes.SET_DUAL_MAPS: {
-      const { maps } = action.payload;
-      // Attempt to find a colourValue
-      const visualisationName = Object.keys(state.visualisations)[0];
-      let colourValue = findFirstColourValue(state.filters) || state.visualisations[visualisationName].colorValue;
-    
-      // If colourValue is null, default to { value: "YlGnBu", label: "YlGnBu" }
-      if (!colourValue) {
-        colourValue = { value: "YlGnBu", label: "YlGnBu" };
-      }
-
-      return {
-        ...state,
-        maps: maps, // Store the map instances directly in the state
-        color_scheme: colourValue, // Use either the found or default colourValue
-        class_method: "d",
-      };
-    }
     case actionTypes.SET_IS_LOADING: {
       return { ...state, isLoading: true };
     }

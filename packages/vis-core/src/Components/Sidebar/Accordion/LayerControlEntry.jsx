@@ -321,11 +321,9 @@ export const LayerControlEntry = memo(
     const selectedMetricParamName = currentPage.config.filters.find(
       (filter) => filter.containsLegendInfo === true
     );
-    const visualisation =
-      currentPage.pageName.includes("Side-by-Side") ||
-      currentPage.pageName.includes("Side by Side")
-        ? state.leftVisualisations[Object.keys(state.leftVisualisations)[0]]
-        : state.visualisations[Object.keys(state.visualisations)[0]];
+    // Every pane shares the page's copy of a visualisation (panes differ only in params), so
+    // it holds the style and display mode the controls need, on any page layout.
+    const visualisation = state.visualisations[Object.keys(state.visualisations)[0]];
 
     const colorStyle = useMemo(() => {
       // Use the resolved colorStyle from layer metadata if available, otherwise derive from visualization style

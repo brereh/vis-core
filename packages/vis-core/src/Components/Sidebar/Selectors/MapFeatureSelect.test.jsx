@@ -159,11 +159,11 @@ describe("BaseMapFeatureSelect component test", () => {
 describe("getFeatureLookupPath", () => {
   it("defaults to left side path when left has no missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: [],
       },
@@ -172,13 +172,13 @@ describe("getFeatureLookupPath", () => {
     expect(getFeatureLookupPath(layer, "left")).toBe("/api/tiles/left");
   });
 
-  it("selects right side path when targetSide === 'right' and right has no missing params", () => {
+  it("selects right side path when the target pane === 'right' and right has no missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: [],
       },
@@ -188,11 +188,11 @@ describe("getFeatureLookupPath", () => {
 
   it("falls back to right side when left side has missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: ["year"],
         right: [],
       },
@@ -201,13 +201,13 @@ describe("getFeatureLookupPath", () => {
     expect(getFeatureLookupPath(layer)).toBe("/api/tiles/right");
   });
 
-  it("falls back to left side when targetSide is right but right side has missing params", () => {
+  it("falls back to left side when the target pane is right but right side has missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: ["year"],
       },
@@ -218,7 +218,7 @@ describe("getFeatureLookupPath", () => {
   it("returns layer.metadata.path if present", () => {
     const layer = {
       metadata: { path: "/api/metadata/tiles" },
-      sidePaths: { left: "/api/tiles/left", right: "/api/tiles/right" },
+      panePaths: { left: "/api/tiles/left", right: "/api/tiles/right" },
     };
     expect(getFeatureLookupPath(layer)).toBe("/api/metadata/tiles");
     expect(getFeatureLookupPath(layer, "right")).toBe("/api/metadata/tiles");

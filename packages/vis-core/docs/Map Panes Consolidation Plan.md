@@ -58,7 +58,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
 5. **Copies of visualisation state.** `ADD_VISUALISATION` copies visualisations into the left and right slices once. After that, `UPDATE_LEGEND_TEXT`, `UPDATE_DISPLAY_MODE`, `UPDATE_PATH_PARAMS` and `UPDATE_QUERY_PARAMS` only touch `state.visualisations`. On a dual page:
    - the maps never see those updates
    - callout cards and `DynamicLegend` (which read `state.visualisations`) never see per-side params or data
-6. **Stale maps on navigation.** `RESET_CONTEXT` doesn't clear `map` or `maps`, and `PageSwitch` keeps the same `MapProvider` mounted for both layouts. Navigating from a dual page to a single page appears to leave `MapLayerSection` and `useLayerZoomMessage` reading removed maps.
+6. **Stale maps after a page reset.** `RESET_CONTEXT` doesn't clear `map` or `maps`. In BaseApp this doesn't show: each route has its own page component, so a page change remounts `MapProvider`. It does show wherever one provider is reused across pages (which `MapLayout`'s page-reset logic allows for): `MapLayerSection` and `useLayerZoomMessage` would keep reading removed maps. (Corrected in Phase 2.)
 7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`. Tile layers are protected by the `getSource` check. GeoJSON layers aren't: both instances pass the check before their async fetch returns, so each GeoJSON layer is fetched twice for each map (four requests on a dual page) and `addSource` is called twice on each map (MapLibre throws on the second). Unmounting either instance also tears the layer down on both maps, even though the other instance still shows it.
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
@@ -428,6 +428,30 @@ Behaviour pinned so later phases keep it:
 
 *Exit:* reducer tests are rewritten around panes, and fixes 5–6 are flipped.
 
+**Phase 2 result.** Full suite: 116 suites and 917 tests, all passing. Fixes 5 and 6 are flipped, which leaves 4 known-drift tests for Phase 3.
+
+- **New modules:**
+  - `src/map/resolveMapGrid.js` (presets only; custom grids come in Phase 4)
+  - `src/map/resolveFilterPanes.js`
+  - `src/reducers/paneState.js`: the shared-copy-or-override rule, pane data, per-pane layer paths, pane map registration
+  - `src/reducers/mapSelectors.js` and `src/hooks/usePaneVisualisation.js`
+- **State:**
+  - added: `mapGrid`, `mapsByPane`, `paneOverrides`, `paneData`
+  - removed: `leftVisualisations`, `rightVisualisations`, `maps`, `SET_DUAL_MAPS`, and the dead colour-scheme code in `SET_MAP`
+  - `SET_MAP` is kept as an alias that registers the primary pane's map
+  - `UPDATE_DUAL_*` are aliases of `UPDATE_*_PARAMS`
+  - layers use `panePaths`/`paneMissingParams`, with `separatePanePaths` accepted alongside `separateSidePaths`
+- **Consumers.** `MapContext` stores each filter's resolved `panes` and `paneScope`. `MapLayout`, the feature selectors, `DualMaps`, `Map`, `MapVisualisation`, `Layer`, `MapLayerSection`, `useLayerZoomMessage` and `LayerControlEntry` read panes and selectors.
+- **Name rules.** All five copies of the `Left`/`Right`/`Side` rules and the `pageName` rule are gone. The name rules survive only as the legacy fallback in `resolveFilterPanes`. (`LayerControlEntry` moved here rather than in Phase 5, because removing the left/right copies forced it.)
+- **Map registration.** Maps register per pane, register again if a reset clears them while they stay mounted, and unregister on unmount.
+- **Behaviour changes, beyond fixes 5–6:**
+  - On dual pages, a filter that isn't side-specific now reaches both maps (§4).
+  - `UPDATE_DUAL_*` without `sides` targets every pane; before, it targeted the left one only. `MapLayout` always sent `sides`, so no page config relied on this.
+  - An explicit `sides` in a filter's config now wins over the name rules. Before, the name rules overwrote it for filters on "Side" visualisations.
+  - A pane classifies over its own freshly fetched data plus the other panes' last stored data. Before, both sides came from state, one render behind.
+  - The layer controls read the page's copy of the visualisation on dual pages too. It holds the same style, and its display mode is now up to date.
+- **Kept until Phase 3:** `MapLayout` skips re-dispatching map-click filters on any page with more than one pane (not only filters targeting several panes), because `DualMaps` still dispatches every map-click filter to both sides.
+
 ### Phase 3: `MapPane` replaces both components
 - Add `MapPane`, `MapGroupProvider`, and a `MapGrid` that supports only the presets for now.
 - `Layer`, `SpiderLayer` and `MapVisualisation` take `map` and `paneId`. Split `VisualisationManager`. Add `PageLegend` (one group on the presets).
@@ -480,6 +504,7 @@ Behaviour pinned so later phases keep it:
 | Map instances stored in reducer state | Kept, as today. Moving them into a ref-based registry (`MapGroupContext`) is a possible follow-up, not needed for this work. |
 
 **Deferred, by decision or out of scope:**
+- **Telling id-less features apart.** The hover fast path compares feature ids, so two different features without ids on one layer count as the same. A second tap on such a feature moves the popup but keeps the first feature's text. This predates the consolidation; Phase 3 could compare a key that falls back to the feature's properties or geometry.
 - **Per-pane style controls.** Move runtime style into a `layerStyles[styleKey]` slice, where `styleKey` is the layer, or layer plus pane for opted-out panes, so opted-out panes get their own entry in the layer controls.
 - **Non-map cell types**, such as charts, standalone card stacks and text. The grid's cell registry is the extension point.
 - **Per-group `currentZoom`** for zoom-gated legend sections on independent panes.

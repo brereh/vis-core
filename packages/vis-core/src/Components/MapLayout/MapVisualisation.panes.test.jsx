@@ -2,15 +2,16 @@
  * Classification across map panes: panes showing the same visualisation are coloured from
  * one set of classes, computed over all their data, so colours are comparable.
  *
- * Panes are set up only through `renderOnPanes` and `paneState`, which know today's
- * left/right props and state. Phase 2/3 of docs/Map Panes Consolidation Plan.md changes
- * those helpers, not the assertions.
+ * Panes are set up only through `renderOnPanes` and `paneState`. Phase 2 of
+ * docs/Map Panes Consolidation Plan.md moved them from left/right props and state to pane ids
+ * and pane-keyed state; the assertions didn't change.
  */
 import { render, waitFor } from "@testing-library/react";
 import { MapContext } from "contexts/MapContext";
 import { AppContext } from "contexts/AppContext";
 import { MapVisualisation } from "./MapVisualisation";
 import { createFakeMap } from "testing/mapLibreFake";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("hooks/useFetchVisualisationData", () => ({
@@ -46,9 +47,10 @@ const visualisation = {
 
 /** Map state for a side-by-side page whose panes hold the given data. */
 const paneState = ({ left, right }) => ({
+  mapGrid: resolveMapGrid({ type: "DualMapLayout", config: { visualisations: [visualisation] } }),
   visualisations: { [VIS]: { ...visualisation } },
-  leftVisualisations: { [VIS]: { ...visualisation, data: left } },
-  rightVisualisations: { [VIS]: { ...visualisation, data: right } },
+  paneOverrides: {},
+  paneData: { left: { [VIS]: left }, right: { [VIS]: right } },
 });
 
 /** Renders the visualisation once per pane, each on its own map. */
@@ -56,8 +58,8 @@ const renderOnPanes = (state, maps) =>
   render(
     <AppContext.Provider value={{ appPages: [{ url: "/" }], defaultBands: [] }}>
       <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
-        <MapVisualisation visualisationName={VIS} map={maps.left} left={true} />
-        <MapVisualisation visualisationName={VIS} map={maps.right} left={false} />
+        <MapVisualisation visualisationName={VIS} map={maps.left} paneId="left" />
+        <MapVisualisation visualisationName={VIS} map={maps.right} paneId="right" />
       </MapContext.Provider>
     </AppContext.Provider>
   );

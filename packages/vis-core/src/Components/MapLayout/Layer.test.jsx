@@ -46,6 +46,9 @@ const mockMapContext = {
   },
   dispatch: jest.fn(),
 };
+// The single map is registered as the page's only pane.
+mockMapContext.state.mapsByPane = { main: mockMapContext.state.maps[0] };
+
 const mockFilterContext = {
   state: {
     filter: {
@@ -651,6 +654,7 @@ describe("Layer zone boundaries dark mode colour inversion", () => {
       },
       dispatch: jest.fn(),
     };
+    customMapContext.state.mapsByPane = { main: customMapContext.state.maps[0] };
     api.geodataService.buildTileLayerUrl.mockReturnValue("/test-tiles");
   });
 
@@ -757,6 +761,7 @@ describe("Layer zone boundaries opacity", () => {
       },
       dispatch: jest.fn(),
     };
+    customMapContext.state.mapsByPane = { main: customMapContext.state.maps[0] };
     api.geodataService.buildTileLayerUrl.mockReturnValue("/test-tiles");
   });
 

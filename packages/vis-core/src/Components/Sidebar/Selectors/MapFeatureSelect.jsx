@@ -75,18 +75,22 @@ const EnableSelectButton = styled.button`
 `;
 
 /**
- * Gets the path to look up a layer's features, using the right side path for dual maps
- * when the left side still has missing params.
+ * Gets the path to look up a layer's features. For a layer with a path per map pane, uses
+ * the target pane's path, or another pane's whose params are all set if the target's aren't.
  *
  * @param {Object} layer - The layer from mapState.
+ * @param {string} [targetPane] - The pane the filter targets; defaults to the first pane.
  * @returns {string|undefined} The feature lookup path.
  */
-export const getFeatureLookupPath = (layer, targetSide = "left") => {
+export const getFeatureLookupPath = (layer, targetPane) => {
   if (layer?.metadata?.path) return layer.metadata.path;
-  if (layer?.sidePaths) {
-    const side = targetSide === "right" ? "right" : "left";
-    const other = side === "left" ? "right" : "left";
-    return layer.sideMissingParams?.[side]?.length ? layer.sidePaths[other] : layer.sidePaths[side];
+  if (layer?.panePaths) {
+    const paneIds = Object.keys(layer.panePaths);
+    const pane = paneIds.includes(targetPane) ? targetPane : paneIds[0];
+    const isComplete = (id) => !layer.paneMissingParams?.[id]?.length;
+    if (isComplete(pane)) return layer.panePaths[pane];
+    const complete = paneIds.find(isComplete);
+    return layer.panePaths[complete ?? pane];
   }
   return layer?.path;
 };
@@ -142,8 +146,7 @@ export const BaseMapFeatureSelect = ({ key, filter, value, onChange, showControl
   
 
   // Ensure layer and its properties are defined
-  const targetSide = filter?.sides || filter?.side || (filter?.filterName?.includes("Right") ? "right" : "left");
-  const layerPath = getFeatureLookupPath(layer, targetSide);
+  const layerPath = getFeatureLookupPath(layer, filter?.panes?.[0]);
 
   /**
    * Handles the change in selected options from the dropdown.

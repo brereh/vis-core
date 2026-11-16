@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useMapContext } from "./useMapContext";
+import { selectMaps } from "../reducers/mapSelectors";
 
 /**
  * Custom hook to generate a message for layers that are not visible due to zoom level.
@@ -10,7 +11,7 @@ export const useLayerZoomMessage = () => {
   const [zoomMessage, setZoomMessage] = useState("");
 
   const getVisibleLayers = useCallback(() => {
-    const maps = Array.isArray(state.maps) ? state.maps.filter(map => map) : [state.map].filter(map => map);
+    const maps = selectMaps(state);
     if (maps.length > 0) {
       const newLayers = maps[0].getStyle().layers;
       // Only report on app-configured layers (from state.layers), not base map
@@ -30,7 +31,8 @@ export const useLayerZoomMessage = () => {
       );
     }
     return [];
-  }, [state.maps, state.map, state.layers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.mapsByPane, state.map, state.mapGrid, state.layers]);
 
   useEffect(() => {
     const updateZoomMessage = () => {

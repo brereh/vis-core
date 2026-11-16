@@ -19,14 +19,14 @@ const UPDATE_MARKER_TIMEOUT_MS = 2800;
  *
  * @param {Object} props - The component props.
  * @param {Object} props.visualisationConfigs - Object of configuration objects for the visualizations.
- * @param {Object} props.map - The Maplibre JS map instance.
- * @param {Object} props.maps - The Maplibre JS map instances for left and right maps.
+ * @param {Object} props.map - The Maplibre JS map instance of the pane being drawn.
+ * @param {string} props.paneId - The id of that map pane.
  * @returns {JSX.Element|null} The rendered visualization components.
  */
 export const VisualisationManager = ({
   visualisationConfigs,
   map,
-  maps,
+  paneId,
   ...props
 }) => {
   const sidebarIsOpen = props.sidebarIsOpen;
@@ -229,9 +229,7 @@ export const VisualisationManager = ({
           key={name}
           visualisationName={name}
           map={map}
-          maps={maps}
-          left={props.left}
-          {...props}
+          paneId={paneId}
         />
       ))}
     </>
