@@ -647,7 +647,7 @@ describe("Tests when apiRequest is not null", () => {
     const setFeatureState = jest.fn();
     const queryRenderedFeatures = jest.fn();
     getLayer.mockReturnValue(true);
-    project.mockReturnValue(true);
+    project.mockReturnValue({ x: 100, y: 100 });
     queryRenderedFeatures.mockReturnValue([
       {
         layer: { id: "id", "source-layer": "sourceLayer", source: "source" },

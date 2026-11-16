@@ -1,8 +1,22 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { syncMaps } from "utils";
-import { defaultMapStyle, defaultMapCentre, defaultMapZoom } from "defaults";
-import { registerInitialBaseSources, getInitialBaseSources } from "../map/baseSources";
+import { mapOptions, attributionText, rememberInitialBaseSources } from "../map/mapSetup";
+
+/**
+ * Whether this is a phone or tablet with no mouse, where single-finger gestures should pan
+ * the map but desktop gestures (scroll zoom, double-click zoom, box zoom, keys) are off.
+ */
+const isTouchOnlyMobile = () => {
+  const isNarrowViewport = window.matchMedia("(max-width: 900px)").matches;
+  const hasCoarsePointer =
+    window.matchMedia("(pointer: coarse)").matches ||
+    window.matchMedia("(any-pointer: coarse)").matches;
+  const hasFinePointer =
+    window.matchMedia("(pointer: fine)").matches ||
+    window.matchMedia("(any-pointer: fine)").matches;
+  return isNarrowViewport && hasCoarsePointer && !hasFinePointer;
+};
 
 /**
  * Custom hook to manage two synchronized MapLibre maps.
@@ -30,143 +44,68 @@ export const useDualMaps = (
   const isMapReady = isMapLoaded && isMapStyleLoaded;
 
   useEffect(() => {
-    /**
-     * Initializes the two MapLibre map instances.
-     */
-    const initializeDualMap = () => {      
-      const styleValue = typeof mapStyle === "function" ? mapStyle() : (mapStyle || defaultMapStyle);
-      const commonOptions = {
-        style: styleValue,
-        center: mapCentre || defaultMapCentre,
-        zoom: mapZoom != null ? mapZoom : defaultMapZoom,
-        fadeDuration: 0,
-        refreshExpiredTiles: false,
-        maxTileCacheSize: 500,
-        attributionControl: false,
-        transformRequest: (url, resourceType) => {
-          if (resourceType !== 'Style' && url.startsWith('https://api.os.uk') ) {
-            url = new URL(url);
-            if (!url.searchParams.has('key')) url.searchParams.append('key', import.meta.env.VITE_APP_MAP_API_TOKEN);
-            if (!url.searchParams.has('srs')) url.searchParams.append('srs', 3857);
-            return {
-              url: new Request(url).url
-            };
-          }
-        },
-      };
-
-      const leftMapInstance = new maplibregl.Map({
-        container: leftMapContainerRef.current,
-        ...commonOptions,
-      });
-      
-      // Add event listeners after map creation
-      leftMapInstance.on("style.load", () => {
-        const style = leftMapInstance.getStyle?.();
-        if (style?.sources && !getInitialBaseSources(leftMapInstance)) {
-          registerInitialBaseSources(
-            leftMapInstance,
-            new Set(Object.keys(style.sources))
-          );
-        }
+    const createMap = (containerRef) => {
+      const map = new maplibregl.Map(
+        mapOptions({ container: containerRef.current, mapStyle, mapCentre, mapZoom })
+      );
+      map.on("style.load", () => {
+        rememberInitialBaseSources(map);
         setIsMapStyleLoaded(true);
       });
-      leftMapInstance.on("load", () => {
+      map.on("load", () => {
         setIsMapLoaded(true);
       });
-      leftMapInstance.addControl(
-        new maplibregl.NavigationControl(),
-        "bottom-left"
-      );
-      leftMapInstance.resize();
-
-      const rightMapInstance = new maplibregl.Map({
-        container: rightMapContainerRef.current,
-        ...commonOptions,
-      });
-      
-      // Add event listeners after map creation
-      rightMapInstance.on("style.load", () => {
-        const style = rightMapInstance.getStyle?.();
-        if (style?.sources && !getInitialBaseSources(rightMapInstance)) {
-          registerInitialBaseSources(
-            rightMapInstance,
-            new Set(Object.keys(style.sources))
-          );
-        }
-        setIsMapStyleLoaded(true);
-      });
-      rightMapInstance.on("load", () => {
-        setIsMapLoaded(true);
-      });
-      rightMapInstance.addControl(
-        new maplibregl.NavigationControl(),
-        "bottom-left"
-      );
-      rightMapInstance.addControl(
-        new maplibregl.AttributionControl({
-          compact: true,
-          customAttribution: `Contains OS data © Crown copyright and database right ${new Date().getFullYear()}${extraCopyrightText ? ` | ${extraCopyrightText}` : ''}`
-        }),
-        "bottom-right"
-      );
-      rightMapInstance.resize();
-
-      const isNarrowViewport = window.matchMedia('(max-width: 900px)').matches;
-      const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches ||
-        window.matchMedia('(any-pointer: coarse)').matches;
-      const hasFinePointer = window.matchMedia('(pointer: fine)').matches ||
-        window.matchMedia('(any-pointer: fine)').matches;
-      const shouldDisableDesktopInteractions = isNarrowViewport && hasCoarsePointer && !hasFinePointer;
-
-      if (shouldDisableDesktopInteractions) {
-        [leftMapInstance, rightMapInstance].forEach(map => {
-          map.scrollZoom.disable();      // prevent single-finger zoom
-          map.dragPan.disable();         // prevent single-finger pan
-          map.doubleClickZoom.disable();
-          map.boxZoom.disable();
-          map.keyboard.disable();
-
-          // keep two-finger zoom/pan (nice mobile UX)
-          map.touchZoomRotate.enable();
-          map.touchZoomRotate.disableRotation(); // optional
-        });
-      }
-
-      // Synchronize the two maps
-      syncMaps(leftMapInstance, rightMapInstance);
-
-      setLeftMap(leftMapInstance);
-      setRightMap(rightMapInstance);
+      map.addControl(new maplibregl.NavigationControl(), "bottom-left");
+      return map;
     };
 
-    if (!leftMap && !rightMap) {
-      initializeDualMap();
+    const leftMapInstance = createMap(leftMapContainerRef);
+    const rightMapInstance = createMap(rightMapContainerRef);
+    rightMapInstance.addControl(
+      new maplibregl.AttributionControl({
+        compact: true,
+        customAttribution: attributionText(extraCopyrightText),
+      }),
+      "bottom-right"
+    );
+    leftMapInstance.resize();
+    rightMapInstance.resize();
+
+    if (isTouchOnlyMobile()) {
+      [leftMapInstance, rightMapInstance].forEach((map) => {
+        map.scrollZoom.disable();
+        map.dragPan.disable();
+        map.doubleClickZoom.disable();
+        map.boxZoom.disable();
+        map.keyboard.disable();
+        map.touchZoomRotate.enable();
+        map.touchZoomRotate.disableRotation();
+      });
     }
 
+    const unsync = syncMaps(leftMapInstance, rightMapInstance);
+
+    setLeftMap(leftMapInstance);
+    setRightMap(rightMapInstance);
+
+    // Tear down the instances created by this run of the effect. (Reading leftMap/rightMap
+    // state here would see the values from the first render, which are null.)
     return () => {
-      if (leftMap) {
-        leftMap.remove();
-        setLeftMap(null);
-      }
-      if (rightMap) {
-        rightMap.remove();
-        setRightMap(null);
-      }
+      unsync();
+      leftMapInstance.remove();
+      rightMapInstance.remove();
+      setLeftMap(null);
+      setRightMap(null);
       setIsMapLoaded(false);
       setIsMapStyleLoaded(false);
     };
+    // The maps are created once per mount; centre and zoom changes are applied below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update map center if mapCentre changes
   useEffect(() => {
-    if (
-      leftMap &&
-      rightMap &&
-      Array.isArray(mapCentre) &&
-      mapCentre.length === 2
-    ) {
+    if (leftMap && rightMap && Array.isArray(mapCentre) && mapCentre.length === 2) {
       leftMap.setCenter(mapCentre);
       rightMap.setCenter(mapCentre);
     }
