@@ -138,11 +138,13 @@ const DualMaps = (props) => {
         // Nearest feature first, so the feature under the pointer beats a neighbour that is
         // merely within tolerance. Features that would not get a hover don't end the search.
         const point = map.project(e.lngLat);
-        const features = bufferedBox(point, buffer)
+        const queried = bufferedBox(point, buffer)
           ? queryHoverFeatures(map, sessions[side], point, hoverable, buffer, (feature) =>
               isHoverCandidate(feature, state.layers)
             )
           : [];
+        // Only features with an id can carry hover state across the two maps.
+        const features = (queried || []).filter((f) => f && f.id != null);
         showHoverTooltip({
           map,
           session: sessions[side],

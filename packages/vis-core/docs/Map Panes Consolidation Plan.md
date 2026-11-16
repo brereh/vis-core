@@ -63,7 +63,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
 10. **Inconsistent popup options:** `closeOnMove`, `closeOnClick`, and whether the layer-click handler is skipped on touch devices.
-11. **Dual tooltips stay up after the pointer leaves the map.** The single map clears its tooltip and hover state when the pointer leaves the canvas. Dual only cancels the pending hover pass, so both tooltips stay where they were. Both components also registered a `handleLayerLeave` that never did anything, because the hover id it reads was never set. (Found in Phase 1, which deleted the dead handlers. Phase 3's shared hover hook clears both panes on leave.)
+11. **Dual tooltips stay up after the pointer leaves the map.** The single map clears its tooltip and hover state when the pointer leaves the canvas. Dual only cancels the pending hover pass, so both tooltips stay where they were. Both components also had a `handleLayerLeave` that never did anything, because the hover id it reads was never set. `DualMaps` registered it on `mouseleave`; `Map.jsx` only defined it. (Found in Phase 1, which deleted the dead handlers. Phase 3's shared hover hook clears both panes on leave.)
 
 ### 2.3 Dual mode is guessed from strings
 
@@ -397,7 +397,7 @@ Behaviour pinned so later phases keep it:
 
 *Exit:* both components are thinner, each module has its own unit tests, and fixes 1–4 are flipped.
 
-**Phase 1 result.** Full suite: 109 suites and 836 tests, all passing. Fixes 1–4 are flipped, which leaves 9 known-drift tests for Phases 2 and 3.
+**Phase 1 result.** Full suite: 111 suites and 847 tests, all passing. Fixes 1–4 are flipped, which leaves 9 known-drift tests for Phases 2 and 3.
 
 - **Shared modules:**
   - `src/map/mapSetup.js`: construction options, `transformRequest`, style resolution, attribution text, base-source registration
@@ -409,9 +409,14 @@ Behaviour pinned so later phases keep it:
 - **Size:** `Map.jsx` is down from 1,520 to about 780 lines, and `DualMaps.jsx` from 1,115 to about 450.
 - **Unchanged on purpose:** the single map's map-click selection (per-layer `selected` state) is left alone until Phase 3 unifies map-click filters. Popup options and touch handling stay per component until Phase 3.
 - **Small differences that come with sharing the code:**
-  - On dual maps, features without an id are no longer considered for tooltips; they can't carry hover state anyway.
+  - On dual maps, features without an id are no longer considered for hover tooltips; they can't carry hover state anyway. (The single map already filtered them out of its hover query. A tapped feature without an id still gets its tooltip, just no hover state.)
   - A hit box with a non-finite point is skipped rather than queried.
   - OS tile URLs are normalised with `URL.href`, which gives the same string as `new Request(url).url`.
+  - Clearing a tooltip (no feature, no hoverable layers, an empty tap) now also cancels a pending or in-flight custom-tooltip fetch. Before, it only removed the popup.
+  - Layer-click popups show "Value: 0" for a feature with no `state`. Before, both components threw.
+  - On dual maps, a custom tooltip whose response is empty renders its template against `{}`, as the single map does. Before, it threw and showed the fallback.
+  - On dual maps, each label layer updates on its own map's `zoomend`, not on either map's. The maps are synced, so this is equivalent in practice.
+- **Also fixed:** dual custom tooltips used one hover counter for both panes, bumped once per pane in the same pass. When both panes moved to new features at once, the left pane's custom data was treated as stale and never filled in. Each pane now has its own hover session.
 - **Test changes:** one existing `DualMaps.test` case stubbed `project()` to return `true`. It now returns a screen point, with its assertion unchanged. The dual hover characterisation now expects the single map's number formatting.
 
 ### Phase 2: Pane-keyed state

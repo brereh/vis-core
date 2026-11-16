@@ -106,14 +106,14 @@ describe("bufferedBox", () => {
 describe("tooltipFeatures", () => {
   const layers = { zones: {}, dataOnly: { shouldHaveHoverOnlyOnData: true }, stations: {} };
 
-  it("drops features without an id, a layer, or a configured layer", () => {
-    const features = [
-      zone(),
-      { ...zone(), id: null },
-      { ...zone(), layer: undefined },
-      zone({ layerId: "unknown" }),
-    ];
+  it("drops features without a layer or a configured layer", () => {
+    const features = [zone(), { ...zone(), layer: undefined }, zone({ layerId: "unknown" }), null];
     expect(tooltipFeatures(features, layers)).toEqual([features[0]]);
+  });
+
+  it("keeps features without an id (tapped GeoJSON features often have none)", () => {
+    const noId = { ...zone(), id: undefined };
+    expect(tooltipFeatures([noId], layers)).toEqual([noId]);
   });
 
   it("drops features without data on layers that only hover on data", () => {

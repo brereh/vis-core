@@ -1,9 +1,10 @@
 /**
  * Hover tooltip content, shared by every map pane.
  *
- * Pure functions: they take rendered features and the page's layer and visualisation
- * config, and return HTML or plain data. Nothing here touches a map or a popup; see
- * hoverTooltip.js for that.
+ * Builds tooltip HTML from rendered features and the page's layer and visualisation config.
+ * Most functions are pure; `hoverableLayerIds` and `spiderOverlayLayerIds` only read which
+ * layers a map has, and `fetchCustomTooltip` requests custom tooltip data from the API.
+ * Nothing here changes a map or opens a popup; see hoverTooltip.js for that.
  */
 import { api } from "services";
 import {
@@ -126,8 +127,12 @@ export function bufferedBox(point, buffer) {
 }
 
 /**
- * Drops features a tooltip shouldn't be shown for: those without an id or layer, and
- * those without data on layers that set `shouldHaveHoverOnlyOnData`.
+ * Drops features a tooltip shouldn't be shown for: those without a layer or on layers the
+ * page doesn't configure, and those without data on layers that set
+ * `shouldHaveHoverOnlyOnData`.
+ *
+ * Features without an id are kept: a tapped GeoJSON feature often has none, and still gets
+ * a tooltip (just no hover state). Callers that query by pointer position drop them first.
  *
  * @param {Object[]} features - Rendered features.
  * @param {Object<string, Object>} layers - Page layer config.
@@ -135,7 +140,7 @@ export function bufferedBox(point, buffer) {
  */
 export function tooltipFeatures(features, layers) {
   return (features || []).filter((feature) => {
-    if (!feature || feature.id == null || !feature.layer?.id) return false;
+    if (!feature || !feature.layer?.id) return false;
     const config = layers[resolveBaseLayerId(feature.layer.id)];
     if (!config) return false;
     if (config.shouldHaveHoverOnlyOnData) {

@@ -143,7 +143,77 @@ describe("showHoverTooltip", () => {
   });
 });
 
+describe("features without an id", () => {
+  it("get a tooltip but no hover state", () => {
+    const noId = { ...feature(1), id: undefined };
+    show([noId]);
+
+    expect(FakePopup.open()[0].html).toContain("Zone 1");
+    expect(map.setFeatureState).not.toHaveBeenCalled();
+
+    clearHover(map, session);
+    expect(map.setFeatureState).not.toHaveBeenCalled();
+    expect(FakePopup.open()).toEqual([]);
+  });
+});
+
+describe("aborting custom tooltip fetches", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  const signalOfLastFetch = () => api.baseService.get.mock.calls.at(-1)[1].signal;
+
+  it("aborts an in-flight fetch when the pointer moves to another feature", () => {
+    api.baseService.get.mockReturnValue(new Promise(() => {}));
+    show([feature(1, "custom")]);
+    jest.advanceTimersByTime(CUSTOM_TOOLTIP_DELAY_MS);
+    const signal = signalOfLastFetch();
+
+    show([feature(2)]);
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts an in-flight fetch when the hover is cleared", () => {
+    api.baseService.get.mockReturnValue(new Promise(() => {}));
+    show([feature(1, "custom")]);
+    jest.advanceTimersByTime(CUSTOM_TOOLTIP_DELAY_MS);
+    const signal = signalOfLastFetch();
+
+    clearHover(map, session);
+
+    expect(signal.aborted).toBe(true);
+  });
+});
+
 describe("separate sessions", () => {
+  it("fill in both maps' custom tooltips when both move to new features at once", async () => {
+    jest.useFakeTimers();
+    try {
+      const other = createFakeMap();
+      const otherSession = createHoverSession();
+      api.baseService.get.mockResolvedValue({ total: 7 });
+
+      show([feature(1, "custom")]);
+      showHoverTooltip({
+        map: other,
+        session: otherSession,
+        features: [feature(2, "custom")],
+        lngLat: LNG_LAT,
+        layers,
+        visualisations: {},
+      });
+      jest.advanceTimersByTime(CUSTOM_TOOLTIP_DELAY_MS);
+      await flushPromises();
+
+      const popups = FakePopup.open();
+      expect(popups).toHaveLength(2);
+      popups.forEach((popup) => expect(popup.html).toContain("Total 7"));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("keep two maps' tooltips independent", () => {
     const other = createFakeMap();
     const otherSession = createHoverSession();
