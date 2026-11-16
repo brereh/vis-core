@@ -170,6 +170,10 @@ describe("known drift (plan §2.2(7)): each pane's layer is set up by both panes
   test.failing("adds a GeoJSON layer's source to each pane's map only once", async () => {
     const maps = createPaneMaps();
     renderLayerOnPanes(geojsonLayer, maps);
+    await waitFor(() => {
+      expect(maps.left.getSource("Stations")).toBeDefined();
+      expect(maps.right.getSource("Stations")).toBeDefined();
+    });
     await flushFetches();
 
     expect(maps.left.duplicateSources).toEqual([]);
@@ -181,6 +185,8 @@ describe("known drift (plan §2.2(7)): each pane's layer is set up by both panes
     renderLayerOnPanes(geojsonLayer, maps);
     await flushFetches();
 
+    // "At most" rather than exactly two: panes showing the same layer may share one fetch
+    // later (plan §3.8). The ordinary test above pins that the layer reaches both maps.
     expect(api.geodataService.getLayer.mock.calls.length).toBeLessThanOrEqual(2);
   });
 

@@ -10,14 +10,17 @@
  *
  * After each test it puts the originals back.
  */
+const INSTALLED = ["matchMedia", "ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame"];
+
 export function useMapBrowserEnv({ matches = () => false, immediateAnimationFrames = false } = {}) {
   const originals = {};
 
   beforeEach(() => {
-    originals.matchMedia = window.matchMedia;
-    originals.ResizeObserver = global.ResizeObserver;
-    originals.requestAnimationFrame = window.requestAnimationFrame;
-    originals.cancelAnimationFrame = window.cancelAnimationFrame;
+    // Remember whether each global existed at all: code under test checks
+    // `"ResizeObserver" in window`, so a missing one must stay missing afterwards.
+    INSTALLED.forEach((name) => {
+      originals[name] = { present: name in window, value: window[name] };
+    });
 
     window.matchMedia = (query) => ({
       matches: Boolean(matches(query)),
@@ -44,9 +47,9 @@ export function useMapBrowserEnv({ matches = () => false, immediateAnimationFram
   });
 
   afterEach(() => {
-    window.matchMedia = originals.matchMedia;
-    global.ResizeObserver = originals.ResizeObserver;
-    window.requestAnimationFrame = originals.requestAnimationFrame;
-    window.cancelAnimationFrame = originals.cancelAnimationFrame;
+    INSTALLED.forEach((name) => {
+      if (originals[name].present) window[name] = originals[name].value;
+      else delete window[name];
+    });
   });
 }

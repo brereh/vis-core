@@ -116,16 +116,30 @@ describe("createFakeMap", () => {
   it("announces camera changes as MapLibre does", () => {
     const map = createFakeMap({ zoom: 5 });
     const events = [];
-    ["movestart", "move", "moveend", "zoomstart", "zoom", "zoomend"].forEach((type) =>
-      map.on(type, () => events.push(type))
-    );
+    ["movestart", "move", "moveend"]
+      .concat(...["zoom", "rotate", "pitch"].map((kind) => [`${kind}start`, kind, `${kind}end`]))
+      .forEach((type) => map.on(type, () => events.push(type)));
 
     map.panTo([1, 1]);
     expect(events).toEqual(["movestart", "move", "moveend"]);
 
     events.length = 0;
     map.setZoom(6);
-    expect(events).toEqual(["movestart", "zoomstart", "move", "zoom", "moveend", "zoomend"]);
+    expect(events).toEqual(["movestart", "move", "zoomstart", "zoom", "zoomend", "moveend"]);
+
+    events.length = 0;
+    map.jumpTo({ zoom: 6, bearing: 30, pitch: 10 });
+    expect(events).toEqual([
+      "movestart",
+      "move",
+      "rotatestart",
+      "rotate",
+      "rotateend",
+      "pitchstart",
+      "pitch",
+      "pitchend",
+      "moveend",
+    ]);
   });
 
   it("centres on fitted bounds", () => {
