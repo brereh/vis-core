@@ -5,87 +5,16 @@ import { useMap } from "hooks/useMap";
 import { api } from "services";
 import { registerInitialBaseSources } from "../../map/baseSources";
 
-jest.mock("maplibre-gl", () => {
-  class Popup {
-    constructor(options) {
-      this.options = options;
-      this.remove = jest.fn(() => this);
-    }
-    setLngLat(coords) {
-      this.coords = coords;
-      return this;
-    }
-    setHTML(html) {
-      this.html = html;
-      return this;
-    }
-    addTo(map) {
-      this.map = map;
-      return this;
-    }
-  }
-
-  class LngLatBounds {
-    constructor() {
-      this.bounds = [];
-    }
-    extend(coord) {
-      this.bounds.push(coord);
-      return this;
-    }
-    getNorthEast() {
-      return { lng: 1, lat: 1 };
-    }
-    getSouthWest() {
-      return { lng: -1, lat: -1 };
-    }
-  }
-
-  return {
-    __esModule: true,
-    default: {
-      Popup: Popup,
-      LngLatBounds: LngLatBounds,
-      Map: jest.fn(() => ({
-        on: jest.fn(),
-        off: jest.fn(),
-        remove: jest.fn(),
-        addLayer: jest.fn(),
-        setStyle: jest.fn(),
-        flyTo: jest.fn(),
-      })),
-    },
-    Popup: Popup,
-    LngLatBounds: LngLatBounds,
-  };
-});
+jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 
 import maplibregl from "maplibre-gl";
+import { FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
 import Map from "./Map";
 import { ThemeProvider } from "styled-components";
 import { get } from "lodash";
 
-const OriginalPopupClass = (() => {
-  class Popup {
-    constructor(options) {
-      this.options = options;
-      this.remove = jest.fn(() => this);
-    }
-    setLngLat(coords) {
-      this.coords = coords;
-      return this;
-    }
-    setHTML(html) {
-      this.html = html;
-      return this;
-    }
-    addTo(map) {
-      this.map = map;
-      return this;
-    }
-  }
-  return Popup;
-})();
+// Tests below swap Popup for a spy; beforeEach puts the fake back.
+const OriginalPopupClass = FakePopup;
 
 jest.mock("hooks/useMap", () => ({
   useMap: jest.fn(),
@@ -227,6 +156,7 @@ const once = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetMapLibreFake();
 
   maplibregl.Popup = OriginalPopupClass;
   if (!maplibregl.default) {

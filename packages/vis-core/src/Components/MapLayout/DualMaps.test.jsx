@@ -34,27 +34,7 @@ jest.mock("Components/DynamicLegend/DynamicLegend", () => ({
 jest.mock("hooks/useDualMaps", () => ({
   useDualMaps: jest.fn(),
 }));
-jest.mock("maplibre-gl", () => {
-  class MockPopup {
-    constructor() {
-      this.setLngLat = jest.fn().mockReturnValue(this);
-      this.setHTML = jest.fn().mockReturnValue(this);
-      this.addTo = jest.fn().mockReturnValue(this);
-      this.remove = jest.fn();
-    }
-  }
-  return {
-    Map: jest.fn(() => ({
-      on: jest.fn(),
-      off: jest.fn(),
-      remove: jest.fn(),
-      addLayer: jest.fn(),
-      setStyle: jest.fn(),
-      flyTo: jest.fn(),
-    })),
-    Popup: MockPopup,
-  };
-});
+jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("services", () => ({
   ...jest.requireActual("services"),
   api: {
