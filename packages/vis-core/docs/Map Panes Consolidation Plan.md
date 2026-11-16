@@ -51,7 +51,7 @@ The decisions below were agreed in Q&A. Everything else in this plan follows fro
 
 These come from reading the code. Phase 0 pins each one down with a failing test or a characterisation test before anything changes.
 
-1. **Tooltip values.** Dual reads `feature.state.value`, not `getFeatureStateValue`, so tooltips ignore display modes. It also ignores `hideValueInTooltip` and formats values with `numberWithCommas` instead of `formatNumber`.
+1. **Tooltip values.** Dual ignores `hideValueInTooltip` and formats values with `numberWithCommas` instead of `formatNumber`, so the same value reads differently on a dual page (for example, decimals aren't rounded). It also reads `feature.state.value` directly rather than through `getFeatureStateValue` (`feature?.state?.value`), so a feature with no `state` throws. Display modes aren't affected: both read the same feature-state value.
 2. **Tile auth.** `useDualMaps`'s `transformRequest` never attaches the `Authorization` header, so API tiles that need a token fail on dual pages.
 3. **Base style.** `useDualMaps` passes `defaultMapStyle` (the function itself) where `useMap` calls `defaultMapStyle()`.
 4. **Map cleanup.** `useDualMaps`'s cleanup closes over the initial `null` state, so the maps are never `.remove()`d. `syncMaps`'s unsubscribe is never called either.
@@ -59,7 +59,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
    - the maps never see those updates
    - callout cards and `DynamicLegend` (which read `state.visualisations`) never see per-side params or data
 6. **Stale maps on navigation.** `RESET_CONTEXT` doesn't clear `map` or `maps`, and `PageSwitch` keeps the same `MapProvider` mounted for both layouts. Navigating from a dual page to a single page appears to leave `MapLayerSection` and `useLayerZoomMessage` reading removed maps.
-7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`.
+7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`. Tile layers are protected by the `getSource` check. GeoJSON layers aren't: both instances pass the check before their async fetch returns, so each GeoJSON layer is fetched twice and `addSource` is called twice on each map (MapLibre throws on the second). Unmounting either instance also tears the layer down on both maps.
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
 10. **Inconsistent popup options:** `closeOnMove`, `closeOnClick`, and whether the layer-click handler is skipped on touch devices.
@@ -243,7 +243,7 @@ Each item below is extracted in Phase 1 as a pure module plus a hook, written on
 
 | Module | Behaviour with N panes |
 |---|---|
-| `tooltipContent.js` | Pure: features, layers and visualisations in, HTML and custom-tooltip requests out. Includes `generateMetadataHtml`, metadata injection, joining custom tooltips to the default, and `showAllDataInTooltipForEachGeom`. Uses `getFeatureStateValue`, `formatNumber` and `hideValueInTooltip` everywhere (fixes §2.2(1)). |
+| `tooltipContent.js` | Pure: features, layers and visualisations in, HTML and custom-tooltip requests out. Includes `generateMetadataHtml`, metadata injection, joining custom tooltips to the default, and `showAllDataInTooltipForEachGeom`. Uses `getFeatureStateValue`, `formatNumber` and `hideValueInTooltip` everywhere, and guards a missing `customTooltip` before fetching (fixes §2.2(1)). |
 | `useHoverTooltip` | The pane's own `mousemove` is coalesced per animation frame and sends `hover(lngLat)` to its sync group. Every pane in the group, including the source pane, queries at `map.project(lngLat)` with its own buffer, hover feature state, popup, abort controller and hover-event id. `mouseleave` sends `clear`. Panes outside the group are unaffected. A 1×1 page behaves exactly as today. Spider layers are queried per pane. |
 | `useTouchTooltip` | The tap and hover-capable-touch paths from `Map.jsx`. The forced feature applies only on the tapped pane; the other panes in the group query at the tap's lngLat. |
 | `useLayerClickPopups` | Shown on every pane in the group, as dual does today. Popup options follow the single map (`closeOnClick: false`). Skipped on touch devices, as the single map does. |
@@ -365,9 +365,30 @@ Every phase keeps the full suite green and is releasable as a beta on its own. P
 
 *Exit:* green, with the bug inventory checked into the tests.
 
+**Phase 0 result.** The baseline before Phase 0 was 96 suites and 700 tests, all passing. After it: 103 suites and 753 tests, all passing, including 15 known-drift tests marked `test.failing`. Each known-drift test was also run as an ordinary test to confirm it fails on its assertion rather than its setup.
+
+- **Shared fake:** `src/testing/mapLibreFake.js` is an in-memory map with real event dispatch, layers, sources, feature state and camera, plus `FakePopup` and a module mock. `Map.test` and `DualMaps.test` use it. Its spies are created per call, because the jest config sets `resetMocks`.
+- **Probes:** each new test file reaches state and panes only through a few probe helpers at the top of the file. Later phases change the probes, not the assertions.
+
+| Bug (§2.2) | Known-drift test | Flips in |
+|---|---|---|
+| (1) tooltip formatting, `hideValueInTooltip`, missing `state` | `MapLayout/DualMaps.panes.test.jsx` | Phase 1 |
+| (2) no auth header, (3) style function, (4) maps never removed or unsynced | `hooks/mapInstance.test.jsx` | Phase 1 |
+| (5) changes after load don't reach the panes | `reducers/mapReducer.panes.test.js` | Phase 2 |
+| (6) `RESET_CONTEXT` keeps the maps | `reducers/mapReducer.panes.test.js` | Phase 2 |
+| (7) GeoJSON layers fetched and added twice | `MapLayout/Layer.panes.test.jsx` | Phase 3 |
+| (8) card stack rendered twice | `MapLayout/DualMaps.panes.test.jsx` | Phase 3 |
+
+Behaviour pinned so later phases keep it:
+- `syncMaps`: any number of maps, both directions, no echo, unsubscribe (`utils/syncMaps.test.js`)
+- per-side query and path params, and per-side data (`reducers/mapReducer.panes.test.js`)
+- classification over the combined data, with each pane painted from its own data (`MapLayout/MapVisualisation.panes.test.jsx`)
+- hover tooltips, hover state and layer-click popups on both panes (`MapLayout/DualMaps.panes.test.jsx`)
+- `useMap`'s auth header, default style and teardown (`hooks/mapInstance.test.jsx`)
+
 ### Phase 1: Extract shared modules (no behaviour change except fixes)
 - Extract into `map/interactions/*`: `tooltipContent`, `selectionHighlight`, label layers, the focus and fit-bounds maths, the hover buffer calculation and the popup controller.
-- `Map.jsx` and `DualMaps.jsx` both call them. Dual picks up `getFeatureStateValue`, `formatNumber` and `hideValueInTooltip` (fix 1).
+- `Map.jsx` and `DualMaps.jsx` both call them. Dual picks up `hideValueInTooltip`, `formatNumber` and the null-safe value read (fix 1).
 - Fix `useDualMaps` items 2–4 now, as small commits, because they are independent of the restructure.
 
 *Exit:* both components are thinner, each module has its own unit tests, and fixes 1–4 are flipped.
