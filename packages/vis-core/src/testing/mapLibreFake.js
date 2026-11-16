@@ -17,7 +17,10 @@
  *   `features`, and array layer ids (`on(type, [ids], fn)`) aren't supported;
  * - `once(type)` without a handler doesn't return a Promise;
  * - `removeSource` doesn't refuse a source still used by layers, and `setFeatureState`
- *   doesn't check the source exists or that vector sources are given a `sourceLayer`.
+ *   doesn't check the source exists or that vector sources are given a `sourceLayer`;
+ *   `removeFeatureState` ignores its `key` argument;
+ * - `fitBounds` takes only `[[west, south], [east, north]]`, not a `LngLatBounds` or a flat
+ *   array, and leaves the zoom alone.
  *
  * Usage in a test file:
  *
@@ -304,21 +307,32 @@ export function createFakeMap(options = {}) {
   const toLngLat = (value) =>
     Array.isArray(value) ? { lng: value[0], lat: value[1] } : { lng: value.lng, lat: value.lat };
 
-  // As in MapLibre, every camera change is applied at once and announced with
-  // movestart/move/moveend (and zoomstart/zoom/zoomend when the zoom changes), so code
-  // that follows the camera, such as syncMaps, is exercised for real.
+  // As in MapLibre's jumpTo, every camera change is applied at once and announced in
+  // MapLibre's order: movestart, move, then zoom/rotate/pitch start, change and end for
+  // whichever changed, then moveend. Code that follows the camera, such as syncMaps, is
+  // exercised for real.
   map.jumpTo = jest.fn((view = {}) => {
     const zoomChanged = view.zoom != null && view.zoom !== camera.zoom;
+    const bearingChanged = view.bearing != null && view.bearing !== camera.bearing;
+    const pitchChanged = view.pitch != null && view.pitch !== camera.pitch;
     if (view.center) camera.center = toLngLat(view.center);
-    if (view.zoom != null) camera.zoom = view.zoom;
-    if (view.bearing != null) camera.bearing = view.bearing;
-    if (view.pitch != null) camera.pitch = view.pitch;
+    if (zoomChanged) camera.zoom = view.zoom;
+    if (bearingChanged) camera.bearing = view.bearing;
+    if (pitchChanged) camera.pitch = view.pitch;
     map.fire("movestart");
-    if (zoomChanged) map.fire("zoomstart");
     map.fire("move");
-    if (zoomChanged) map.fire("zoom");
+    [
+      ["zoom", zoomChanged],
+      ["rotate", bearingChanged],
+      ["pitch", pitchChanged],
+    ]
+      .filter(([, changed]) => changed)
+      .forEach(([kind]) => {
+        map.fire(`${kind}start`);
+        map.fire(kind);
+        map.fire(`${kind}end`);
+      });
     map.fire("moveend");
-    if (zoomChanged) map.fire("zoomend");
     return map;
   });
   map.getZoom = jest.fn(() => camera.zoom);

@@ -130,9 +130,10 @@ describe("side-by-side hover", () => {
     expect(popupOn(maps.left).lngLat).toEqual(LNG_LAT);
     expect(popupOn(maps.right).lngLat).toEqual(LNG_LAT);
     expect(tooltipName(maps.left)).toBe("Leeds");
-    expect(tooltipValue(maps.left)).toBe("12");
+    // Values are formatted as on the single map (plan §2.2(1)).
+    expect(tooltipValue(maps.left)).toBe(formatNumber(12));
     expect(tooltipName(maps.right)).toBe("Leeds");
-    expect(tooltipValue(maps.right)).toBe("34");
+    expect(tooltipValue(maps.right)).toBe(formatNumber(34));
   });
 
   it("marks the hovered feature on each pane", () => {
@@ -167,8 +168,8 @@ describe("side-by-side layer click popups", () => {
 
 // --- known drift: intended behaviour that fails today (plan §2.2) ------------------------
 
-describe("known drift (plan §2.2(1)): dual tooltips match the single map", () => {
-  test.failing("formats the value as the single map does", () => {
+describe("dual tooltips match the single map (fixed drift, plan §2.2(1))", () => {
+  test("formats the value as the single map does", () => {
     const value = 1234.5678;
     const feature = createFeature({ id: 7, layerId: LAYER, properties: { name: "Leeds" }, state: { value } });
     const maps = { left: paneMap("left", [feature]), right: paneMap("right", [feature]) };
@@ -179,7 +180,7 @@ describe("known drift (plan §2.2(1)): dual tooltips match the single map", () =
     expect(tooltipValue(maps.left)).toBe(formatNumber(value));
   });
 
-  test.failing("leaves the value out when the layer sets hideValueInTooltip", () => {
+  test("leaves the value out when the layer sets hideValueInTooltip", () => {
     const feature = createFeature({ id: 7, layerId: LAYER, properties: { name: "Leeds" }, state: { value: 4321 } });
     const maps = { left: paneMap("left", [feature]), right: paneMap("right", [feature]) };
     renderSideBySide({ state: baseState({ hideValueInTooltip: true }), maps });
@@ -190,7 +191,7 @@ describe("known drift (plan §2.2(1)): dual tooltips match the single map", () =
     expect(popupOn(maps.left).html).not.toContain("4,321");
   });
 
-  test.failing("shows the name of a feature that has no feature state yet", () => {
+  test("shows the name of a feature that has no feature state yet", () => {
     const feature = createFeature({ id: 7, layerId: LAYER, properties: { name: "Leeds" } });
     delete feature.state;
     const maps = { left: paneMap("left", [feature]), right: paneMap("right", [feature]) };
