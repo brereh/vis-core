@@ -36,6 +36,7 @@ export default {
     '^enums/(.*)$': '<rootDir>/src/enums/$1',
     '^enums$': '<rootDir>/src/enums/index.js',
     '^defaults$': '<rootDir>/src/defaults.js',
+    '^testing/(.*)$': '<rootDir>/src/testing/$1',
   },
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
@@ -51,6 +52,7 @@ export default {
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
     '!src/index.tsx',
+    '!src/testing/**',
   ],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node'],
   resetMocks: true,
