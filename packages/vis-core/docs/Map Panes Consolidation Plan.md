@@ -25,7 +25,7 @@ The decisions below were agreed in Q&A. Everything else in this plan follows fro
 | Parity | Dual pages inherit everything the single map does. |
 | Filter UI | One sidebar. Filters that target only some panes are grouped under the pane title (only when panes have titles, so presets look as they do today). |
 | Layer controls | One control per layer, applied to every pane showing it. |
-| Mobile | Cells stack in order and every map uses the single-map touch policy (two-finger pan and zoom). |
+| Mobile | Cells stack in order. Every map uses today's dual-map touch policy: **one-finger pan is kept**, with pinch to zoom. |
 | Pane cap | Soft cap: a dev warning above 4 map panes, and each pane's tile cache shrinks as the count grows. |
 | Overlays | One callout-card stack and one legend per page. The legend has a section per classification group. |
 | Per-pane style controls | **Deferred.** Opted-out panes compute bins from their own data and get their own legend section, but share the layer's controls. |
@@ -288,7 +288,13 @@ The `MapLayout` effect B2 skips `type: "map"` filters **only when they target mo
 ### 3.11 Mobile, touch, attribution and limits
 
 - **Mobile layout:** the grid becomes one column in row-major order. Each map cell gets today's single-map mobile height (`56vh`, minimum 320px) and the `map-stack` wrapper with the attribution bar below it.
-- **Touch:** `applyTouchPolicy(map)` applies today's single-map policy everywhere (no one-finger pan, two-finger pan and zoom, no rotation). Dual's effect that re-enabled `dragPan` is deleted.
+- **Touch:** `applyTouchPolicy(map)` applies today's dual-map policy to every pane:
+  - **Detection:** only a touch-only device counts (narrow viewport, coarse pointer and no fine pointer). Today's single-map check (viewport ≤ 900px alone) also catches narrow desktop windows and turns off their drag pan and scroll zoom.
+  - **On:** one-finger pan (`dragPan`), and pinch to zoom without rotation.
+  - **Off:** scroll zoom, double-click zoom, box zoom and keyboard.
+
+  This lives in one function, so `useMap` no longer turns `dragPan` off only for the dual component to turn it back on.
+- **Page scroll with one-finger pan:** a finger on a map pans the map, so the page has to be scrollable from somewhere else. On mobile, each map cell stays at most `56vh` tall, and stacked cells are separated by a gap of at least 24px. Part of the page outside the maps is always on screen to scroll from, and the sidebar sits above the grid as it does today.
 - **Attribution:**
   - **1 pane:** today's full pill, with the navigation-offset logic.
   - **More than 1 pane:** a compact `AttributionControl` with the OS line on every pane. Panes can show different sources, so each one carries its own attribution. Dual today shows it on the right map only.
@@ -304,7 +310,6 @@ Everything not listed here should behave exactly as before. Each change is calle
 - the fixes in §2.2(1)–(10)
 - every single-map feature listed in §2.2(9)
 - popup options as on the single map
-- one-finger pan stops working on touch-only phones
 - compact attribution on both maps
 - one card stack instead of two
 - a filter that isn't side-specific and uses `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now affects both maps (it was silently dropped before, see §2.2(5))
@@ -313,6 +318,8 @@ Everything not listed here should behave exactly as before. Each change is calle
 **Single pages:**
 - clicking an empty area keeps the current map-filter highlight, so the highlight matches the filter value that is still applied (today it clears the highlight but keeps the value)
 - the `ResizeObserver` replaces relying on window resize
+- on touch-only phones, one-finger pan starts working (today single maps need two fingers)
+- narrow desktop windows (≤ 900px) keep drag pan and scroll zoom (today they lose both)
 
 **Both:**
 - `state.map` and the other map state are cleared when the page changes
@@ -420,6 +427,7 @@ Every phase keeps the full suite green and is releasable as a beta on its own. P
 | The memoised merge in `usePaneVisualisation` changes identity too often, so fetches repeat | Memoise on the canonical and override references only. A test asserts one fetch per param change per pane. |
 | N instances of `MapVisualisation` race on page-wide flags | `SET_NO_DATA_RETURNED` is aggregated (§3.8). Classification-method initialisation dispatches only if the value isn't set, and is idempotent. |
 | Memory and GPU use with many panes | Soft cap, tile-cache scaling and the context-loss message (§3.11). |
+| One-finger pan on stacked mobile maps makes the page hard to scroll | Each cell is at most `56vh` tall, with a gap of at least 24px between cells (§3.11). Phase 3's mobile check confirms the page scrolls on a real phone for both presets and a 2×2 grid. |
 | A dual config relies on the old silent behaviour | §4 lists every change. The Phase 3 pre-merge check covers BaseApp and the known app configs. |
 | A large diff in Phase 3 | Phases 1–2 move most of the logic first. Phase 3 is mainly wiring and deletion. |
 | Map instances stored in reducer state | Kept, as today. Moving them into a ref-based registry (`MapGroupContext`) is a possible follow-up, not needed for this work. |
