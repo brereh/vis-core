@@ -68,8 +68,11 @@ export function sameTargets(previous, current) {
   );
 }
 
-const setHover = (map, { source, sourceLayer, featureId }, hover) =>
+// Features without an id can't carry feature state; they still get a tooltip.
+const setHover = (map, { source, sourceLayer, featureId }, hover) => {
+  if (featureId == null) return;
   map.setFeatureState({ source, id: featureId, sourceLayer }, { hover });
+};
 
 /**
  * Moves the `hover` feature state from the previous targets to the current ones, touching

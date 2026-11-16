@@ -134,7 +134,9 @@ const DualMaps = (props) => {
       SIDES.forEach((side) => {
         const map = maps[side];
         const box = bufferedBox(map.project(e.lngLat), buffer);
-        const features = box ? map.queryRenderedFeatures(box, { layers: hoverable }) : [];
+        const queried = box ? map.queryRenderedFeatures(box, { layers: hoverable }) : [];
+        // Only features with an id can carry hover state across the two maps.
+        const features = queried.filter((f) => f && f.id != null);
         showHoverTooltip({
           map,
           session: sessions[side],
