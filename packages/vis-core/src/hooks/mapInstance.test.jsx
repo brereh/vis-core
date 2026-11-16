@@ -8,7 +8,8 @@
  * `useDualMaps`, and the pane tests move onto the single hook.
  */
 import { renderHook } from "@testing-library/react";
-import { FakeMapConstructor } from "testing/mapLibreFake";
+import { FakeMapConstructor, resetMapLibreFake } from "testing/mapLibreFake";
+import { useMapBrowserEnv } from "testing/browserEnv";
 import { defaultMapStyle } from "defaults";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
@@ -29,22 +30,12 @@ const containerRef = () => ({ current: document.createElement("div") });
 
 const builtMaps = () => FakeMapConstructor.instances.map(({ map }) => map);
 
+useMapBrowserEnv();
+
 beforeEach(() => {
-  FakeMapConstructor.reset();
+  resetMapLibreFake();
   api.baseService.buildAbsoluteUrl.mockReturnValue(`${API_ORIGIN}/`);
   Cookies.get.mockReturnValue("secret-token");
-  window.matchMedia = jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-  }));
-  global.ResizeObserver = jest.fn().mockImplementation(() => ({
-    observe: jest.fn(),
-    disconnect: jest.fn(),
-  }));
 });
 
 /** What a map's transformRequest does to a request for one of our API's tiles. */
@@ -91,7 +82,6 @@ describe("useDualMaps (two panes)", () => {
     renderDual();
     const [left, right] = builtMaps();
     left.jumpTo({ center: [-1.5, 53.8], zoom: 11 });
-    left.fire("move");
     expect(right.getCenter()).toEqual({ lng: -1.5, lat: 53.8 });
     expect(right.getZoom()).toBe(11);
   });
@@ -99,6 +89,7 @@ describe("useDualMaps (two panes)", () => {
   describe("known drift (plan §2.2(2)–(4))", () => {
     test.failing("sends the user's token with requests to our API, on both panes", () => {
       renderDual();
+      expect(builtMaps()).toHaveLength(2);
       builtMaps().forEach((map) => {
         expect(requestFor(map)).toEqual({
           url: API_TILE_URL,
@@ -109,6 +100,7 @@ describe("useDualMaps (two panes)", () => {
 
     test.failing("starts both panes from the default base style when the page sets none", () => {
       renderDual();
+      expect(builtMaps()).toHaveLength(2);
       builtMaps().forEach((map) => {
         expect(map.constructorOptions.style).toEqual(defaultMapStyle());
       });
@@ -117,6 +109,7 @@ describe("useDualMaps (two panes)", () => {
     test.failing("removes both maps when the panes unmount", () => {
       const { unmount } = renderDual();
       const maps = builtMaps();
+      expect(maps).toHaveLength(2);
       unmount();
       maps.forEach((map) => expect(map.inspect().removed).toBe(true));
     });

@@ -4,6 +4,7 @@ import {
   FakePopup,
   FakeMapConstructor,
   mapLibreModule,
+  resetMapLibreFake,
 } from "testing/mapLibreFake";
 
 describe("createFakeMap", () => {
@@ -112,6 +113,36 @@ describe("createFakeMap", () => {
     expect(right.unproject({ x: 101, y: 2 })).toEqual({ lng: 1, lat: 2 });
   });
 
+  it("announces camera changes as MapLibre does", () => {
+    const map = createFakeMap({ zoom: 5 });
+    const events = [];
+    ["movestart", "move", "moveend", "zoomstart", "zoom", "zoomend"].forEach((type) =>
+      map.on(type, () => events.push(type))
+    );
+
+    map.panTo([1, 1]);
+    expect(events).toEqual(["movestart", "move", "moveend"]);
+
+    events.length = 0;
+    map.setZoom(6);
+    expect(events).toEqual(["movestart", "zoomstart", "move", "zoom", "moveend", "zoomend"]);
+  });
+
+  it("centres on fitted bounds", () => {
+    const map = createFakeMap();
+    map.fitBounds([[-2, 53], [0, 55]], { padding: 10 });
+    expect(map.getCenter()).toEqual({ lng: -1, lat: 54 });
+  });
+
+  it("records errors, logging them when nothing listens", () => {
+    const log = jest.spyOn(console, "error").mockImplementation(() => {});
+    const map = createFakeMap();
+    map.addLayer({ id: "a" });
+    map.addLayer({ id: "a" });
+    expect(map.errors).toHaveLength(1);
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
   it("tracks the camera through jumpTo and the convenience setters", () => {
     const map = createFakeMap({ zoom: 5, center: [1, 2] });
     map.jumpTo({ center: [3, 4], zoom: 8, bearing: 10, pitch: 20 });
@@ -156,8 +187,18 @@ describe("FakePopup", () => {
   });
 });
 
+describe("resetMapLibreFake", () => {
+  it("clears recorded popups and maps", () => {
+    new FakePopup();
+    new FakeMapConstructor({});
+    resetMapLibreFake();
+    expect(FakePopup.instances).toEqual([]);
+    expect(FakeMapConstructor.instances).toEqual([]);
+  });
+});
+
 describe("mapLibreModule", () => {
-  beforeEach(() => FakeMapConstructor.reset());
+  beforeEach(() => resetMapLibreFake());
 
   it("builds fake maps through both default and named exports, keeping the options", () => {
     const module = mapLibreModule();

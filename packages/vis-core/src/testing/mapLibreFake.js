@@ -12,6 +12,13 @@
  * because the jest config sets `resetMocks: true`, which would strip
  * module-level implementations before each test.
  *
+ * Known gaps, none relied on by current tests:
+ * - layer-scoped handlers fire whenever `fire` names their layer; the payload has no
+ *   `features`, and array layer ids (`on(type, [ids], fn)`) aren't supported;
+ * - `once(type)` without a handler doesn't return a Promise;
+ * - `removeSource` doesn't refuse a source still used by layers, and `setFeatureState`
+ *   doesn't check the source exists or that vector sources are given a `sourceLayer`.
+ *
  * Usage in a test file:
  *
  *   jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
@@ -172,15 +179,25 @@ export function createFakeMap(options = {}) {
       (h) => h.type === type && (layerId === undefined || h.layerId === layerId)
     ).length;
 
+  // --- errors ----------------------------------------------------------------
+
+  /** Errors the map reported, in order, whether or not anything listened. */
+  map.errors = [];
+
+  /** As MapLibre does: fire "error", or log it when nothing listens. */
+  const reportError = (error) => {
+    map.errors.push(error);
+    if (map.listenerCount("error") > 0) map.fire("error", { error });
+    else console.error(error);
+  };
+
   // --- style: layers and sources -------------------------------------------
 
   // As in MapLibre, a duplicate layer id is reported through an "error" event rather than
   // thrown (a duplicate source id, below, does throw).
   map.addLayer = jest.fn((layer, beforeId) => {
     if (layers.some((l) => l.id === layer.id)) {
-      map.fire("error", {
-        error: new Error(`Layer with id "${layer.id}" already exists on this map`),
-      });
+      reportError(new Error(`Layer with id "${layer.id}" already exists on this map`));
       return map;
     }
     const index = beforeId ? layers.findIndex((l) => l.id === beforeId) : -1;
@@ -287,29 +304,38 @@ export function createFakeMap(options = {}) {
   const toLngLat = (value) =>
     Array.isArray(value) ? { lng: value[0], lat: value[1] } : { lng: value.lng, lat: value.lat };
 
-  map.getZoom = jest.fn(() => camera.zoom);
-  map.setZoom = jest.fn((zoom) => {
-    camera.zoom = zoom;
-    return map;
-  });
-  map.getCenter = jest.fn(() => ({ ...camera.center }));
-  map.setCenter = jest.fn((center) => {
-    camera.center = toLngLat(center);
-    return map;
-  });
-  map.getBearing = jest.fn(() => camera.bearing);
-  map.getPitch = jest.fn(() => camera.pitch);
-  map.jumpTo = jest.fn((view) => {
+  // As in MapLibre, every camera change is applied at once and announced with
+  // movestart/move/moveend (and zoomstart/zoom/zoomend when the zoom changes), so code
+  // that follows the camera, such as syncMaps, is exercised for real.
+  map.jumpTo = jest.fn((view = {}) => {
+    const zoomChanged = view.zoom != null && view.zoom !== camera.zoom;
     if (view.center) camera.center = toLngLat(view.center);
     if (view.zoom != null) camera.zoom = view.zoom;
     if (view.bearing != null) camera.bearing = view.bearing;
     if (view.pitch != null) camera.pitch = view.pitch;
+    map.fire("movestart");
+    if (zoomChanged) map.fire("zoomstart");
+    map.fire("move");
+    if (zoomChanged) map.fire("zoom");
+    map.fire("moveend");
+    if (zoomChanged) map.fire("zoomend");
     return map;
   });
+  map.getZoom = jest.fn(() => camera.zoom);
+  map.setZoom = jest.fn((zoom) => map.jumpTo({ zoom }));
+  map.getCenter = jest.fn(() => ({ ...camera.center }));
+  map.setCenter = jest.fn((center) => map.jumpTo({ center }));
+  map.getBearing = jest.fn(() => camera.bearing);
+  map.getPitch = jest.fn(() => camera.pitch);
+  // Animated moves finish at once.
   map.flyTo = jest.fn((view) => map.jumpTo(view));
   map.easeTo = jest.fn((view) => map.jumpTo(view));
   map.panTo = jest.fn((center) => map.jumpTo({ center }));
-  map.fitBounds = jest.fn(() => map);
+  /** Centres on the bounds; the zoom is left alone, as the fake has no viewport size. */
+  map.fitBounds = jest.fn((bounds) => {
+    const [[west, south], [east, north]] = bounds;
+    return map.jumpTo({ center: [(west + east) / 2, (south + north) / 2] });
+  });
   map.getBounds = jest.fn(() => ({
     getWest: () => camera.center.lng - 1,
     getSouth: () => camera.center.lat - 1,
@@ -523,6 +549,15 @@ export class FakeMapConstructor {
     // Returning an object from a constructor makes `new` yield that object.
     return map;
   }
+}
+
+/**
+ * Clears the fake's static records (popups and constructed maps). Call it in `beforeEach`:
+ * `resetMocks` in the jest config doesn't touch them.
+ */
+export function resetMapLibreFake() {
+  FakePopup.reset();
+  FakeMapConstructor.reset();
 }
 
 /**

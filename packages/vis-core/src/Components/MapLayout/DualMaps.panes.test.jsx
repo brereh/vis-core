@@ -13,7 +13,8 @@ import { render, screen } from "@testing-library/react";
 import { ThemeProvider } from "styled-components";
 import { MapContext } from "contexts/MapContext";
 import { FilterContext } from "contexts/FilterContext";
-import { createFakeMap, createFeature, FakePopup } from "testing/mapLibreFake";
+import { createFakeMap, createFeature, FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
+import { useMapBrowserEnv } from "testing/browserEnv";
 import { formatNumber } from "utils";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
@@ -24,6 +25,7 @@ jest.mock("./MapVisualisation", () => ({ MapVisualisation: () => null }));
 jest.mock("./CalloutCards/BaseCalloutCardVisualisation", () => ({
   BaseCalloutCardVisualisation: () => null,
 }));
+// The callout-card stack renders inside ScrollableContainer; see the cardStacks probe.
 jest.mock("Components/ScrollableContainer", () => ({
   ScrollableContainer: ({ children }) => <div data-testid="callout-card-stack">{children}</div>,
 }));
@@ -85,32 +87,29 @@ const renderSideBySide = ({ state, maps }) => {
   );
 };
 
+/** The callout-card stacks on the page. */
+const cardStacks = () => screen.queryAllByTestId("callout-card-stack");
+
 // ------------------------------------------------------------------------------------------
 
 const hover = (map) => map.fire("mousemove", { point: { x: 10, y: 20 }, lngLat: LNG_LAT });
 
 const popupOn = (map) => FakePopup.open().find((popup) => popup.map === map);
 
+/** The text of an element of a popup's HTML, e.g. the displayed value. */
+const textIn = (html, selector) => {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return container.querySelector(selector)?.textContent.trim();
+};
+const tooltipValue = (map) => textIn(popupOn(map).html, ".metadata-value");
+const tooltipName = (map) => textIn(popupOn(map).html, ".feature-name");
+
+// Hover passes run straight away instead of on the next animation frame.
+useMapBrowserEnv({ immediateAnimationFrames: true });
+
 beforeEach(() => {
-  FakePopup.reset();
-  // Run hover passes straight away instead of on the next animation frame.
-  jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-    callback();
-    return 1;
-  });
-  jest.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
-  window.matchMedia = jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-  }));
-  global.ResizeObserver = jest.fn().mockImplementation(() => ({
-    observe: jest.fn(),
-    disconnect: jest.fn(),
-  }));
+  resetMapLibreFake();
 });
 
 describe("side-by-side hover", () => {
@@ -130,9 +129,10 @@ describe("side-by-side hover", () => {
     expect(FakePopup.open()).toHaveLength(2);
     expect(popupOn(maps.left).lngLat).toEqual(LNG_LAT);
     expect(popupOn(maps.right).lngLat).toEqual(LNG_LAT);
-    expect(popupOn(maps.left).html).toContain("Leeds");
-    expect(popupOn(maps.left).html).toContain("12");
-    expect(popupOn(maps.right).html).toContain("34");
+    expect(tooltipName(maps.left)).toBe("Leeds");
+    expect(tooltipValue(maps.left)).toBe("12");
+    expect(tooltipName(maps.right)).toBe("Leeds");
+    expect(tooltipValue(maps.right)).toBe("34");
   });
 
   it("marks the hovered feature on each pane", () => {
@@ -160,8 +160,8 @@ describe("side-by-side layer click popups", () => {
 
     maps.left.fire("click", { point: { x: 10, y: 20 }, lngLat: LNG_LAT });
 
-    expect(popupOn(maps.left).html).toContain("Value: 1");
-    expect(popupOn(maps.right).html).toContain("Value: 2");
+    expect(popupOn(maps.left).html).toContain("<p>Value: 1</p>");
+    expect(popupOn(maps.right).html).toContain("<p>Value: 2</p>");
   });
 });
 
@@ -176,7 +176,7 @@ describe("known drift (plan §2.2(1)): dual tooltips match the single map", () =
 
     hover(maps.left);
 
-    expect(popupOn(maps.left).html).toContain(formatNumber(value));
+    expect(tooltipValue(maps.left)).toBe(formatNumber(value));
   });
 
   test.failing("leaves the value out when the layer sets hideValueInTooltip", () => {
@@ -186,7 +186,7 @@ describe("known drift (plan §2.2(1)): dual tooltips match the single map", () =
 
     hover(maps.left);
 
-    expect(popupOn(maps.left).html).toContain("Leeds");
+    expect(tooltipName(maps.left)).toBe("Leeds");
     expect(popupOn(maps.left).html).not.toContain("4,321");
   });
 
@@ -198,7 +198,7 @@ describe("known drift (plan §2.2(1)): dual tooltips match the single map", () =
 
     hover(maps.left);
 
-    expect(popupOn(maps.left).html).toContain("Leeds");
+    expect(tooltipName(maps.left)).toBe("Leeds");
   });
 });
 
@@ -207,6 +207,6 @@ describe("known drift (plan §2.2(8)): one callout-card stack per page", () => {
     const maps = { left: paneMap("left", []), right: paneMap("right", []) };
     renderSideBySide({ state: baseState(), maps });
 
-    expect(screen.getAllByTestId("callout-card-stack")).toHaveLength(1);
+    expect(cardStacks()).toHaveLength(1);
   });
 });

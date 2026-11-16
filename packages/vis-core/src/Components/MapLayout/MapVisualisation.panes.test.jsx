@@ -100,7 +100,8 @@ describe("classification across side-by-side panes", () => {
 
     renderOnPanes(state, maps);
 
-    await waitFor(() => expect(reclassifyData).toHaveBeenCalledTimes(2));
+    // At least once per pane; re-renders may classify again.
+    await waitFor(() => expect(reclassifyData.mock.calls.length).toBeGreaterThanOrEqual(2));
 
     const combined = expect.arrayContaining([...LEFT_DATA, ...RIGHT_DATA]);
     reclassifyData.mock.calls.forEach(([dataToClassify]) => {

@@ -8,7 +8,7 @@ import { registerInitialBaseSources } from "../../map/baseSources";
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 
 import maplibregl from "maplibre-gl";
-import { FakePopup } from "testing/mapLibreFake";
+import { FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
 import Map from "./Map";
 import { ThemeProvider } from "styled-components";
 import { get } from "lodash";
@@ -156,6 +156,7 @@ const once = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetMapLibreFake();
 
   maplibregl.Popup = OriginalPopupClass;
   if (!maplibregl.default) {
