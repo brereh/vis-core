@@ -116,6 +116,7 @@ describe("useDualMaps (two panes)", () => {
 
     test("stops syncing the panes when they unmount", () => {
       const { unmount } = renderDual();
+      expect(builtMaps()).toHaveLength(2);
       const [left, right] = builtMaps();
       unmount();
       expect(left.listenerCount("move")).toBe(0);
