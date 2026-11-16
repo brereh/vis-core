@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import Cookies from "js-cookie";
 import maplibregl from "maplibre-gl";
-import { defaultMapStyle } from "defaults";
-import { defaultMapCentre } from "defaults";
-import { defaultMapZoom } from "defaults";
-import { api } from "services";
-import { registerInitialBaseSources, getInitialBaseSources } from "../map/baseSources";
+import { mapOptions, attributionText, rememberInitialBaseSources } from "../map/mapSetup";
 
 /**
  * Custom hook to initialize and manage a MapLibre map.
@@ -25,7 +20,6 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
   const belowBarRef = useRef(null);
 
   useEffect(() => {
-    // Will be assigned after Map construction; transformRequest can still close over it.
     let mapInstance = null;
     let cleanupLayout = () => {};
 
@@ -59,66 +53,13 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
         container.style.width = '100%';
       }
 
-      const styleValue = typeof mapStyle === 'function' ? mapStyle() : (mapStyle || defaultMapStyle());
-
-      // Compute API base once for transformRequest
-      let apiBaseOrigin = null;
-      try {
-        apiBaseOrigin = new URL(api.baseService.buildAbsoluteUrl("/")).origin;
-      } catch { /* noop */ }
-
-      mapInstance = new maplibregl.Map({
-        container,
-        style: styleValue,
-        center: mapCentre || defaultMapCentre,
-        zoom: mapZoom != null ? mapZoom : defaultMapZoom,
-        // maxZoom: 15,
-        // maxBounds: [
-        //   [ -10.76418, 49.528423 ],
-        //   [ 1.9134116, 61.331151 ]
-        // ],
-        attributionControl: false,
-        fadeDuration: 0,
-        refreshExpiredTiles: false,
-        maxTileCacheSize: 500,
-        transformRequest: (url, resourceType) => {
-          // Append OS params
-          if (resourceType !== 'Style' && url.startsWith('https://api.os.uk')) {
-            url = new URL(url);
-            if (!url.searchParams.has('key')) url.searchParams.append('key', import.meta.env.VITE_APP_MAP_API_TOKEN);
-            if (!url.searchParams.has('srs')) url.searchParams.append('srs', 3857);
-            return {
-              url: new Request(url).url
-            }
-          }
-
-          // Attach Authorization header for API-origin requests (tiles/sprites/glyphs)
-          try {
-            if (apiBaseOrigin) {
-              const u = new URL(url, window.location.origin);
-              if (u.origin === apiBaseOrigin) {
-                const token = Cookies.get('token');
-                if (token) {
-                  return { url, headers: { Authorization: `Bearer ${token}` } };
-                }
-              }
-            }
-          } catch { /* fall through */ }
-
-          return { url };
-        }
-      });
+      mapInstance = new maplibregl.Map(
+        mapOptions({ container, mapStyle, mapCentre, mapZoom })
+      );
 
       // Add event listeners after map creation
       mapInstance.on("style.load", () => {
-        const style = mapInstance.getStyle?.();
-        if (style?.sources && !getInitialBaseSources(mapInstance)) {
-          registerInitialBaseSources(
-            mapInstance,
-            new Set(Object.keys(style.sources))
-          );
-        }
-
+        rememberInitialBaseSources(mapInstance);
         setIsMapStyleLoaded(true);
       });
       mapInstance.on("load", () => {
@@ -128,7 +69,7 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
       const nav = new maplibregl.NavigationControl({ showZoom: true, showCompass: true });
       const attrib = new maplibregl.AttributionControl({
         compact: false,
-        customAttribution: `Contains OS data © Crown copyright and database right ${new Date().getFullYear()}${extraCopyrightText ? ` | ${extraCopyrightText}` : ''}`
+        customAttribution: attributionText(extraCopyrightText)
       });
 
       mapInstance.addControl(nav, 'bottom-left');

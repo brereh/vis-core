@@ -2,10 +2,10 @@
  * Creating and tearing down the MapLibre instance behind a map pane.
  *
  * `useMap` (single pane) and `useDualMaps` (two panes) should agree on how a map is built.
- * The `useMap` tests pin the behaviour to keep. The `useDualMaps` "known drift" tests use
- * `test.failing`: they state that same behaviour for both panes and fail today because of
- * §2.2(2)–(4) of docs/Map Panes Consolidation Plan.md. Phase 1 fixes them; Phase 3 deletes
- * `useDualMaps`, and the pane tests move onto the single hook.
+ * The `useMap` tests pin the behaviour to keep. The `useDualMaps` tests state that same
+ * behaviour for both panes; they were known drift (§2.2(2)–(4) of
+ * docs/Map Panes Consolidation Plan.md) until Phase 1 put both hooks on map/mapSetup.js.
+ * Phase 3 deletes `useDualMaps`, and the pane tests move onto the single hook.
  */
 import { renderHook } from "@testing-library/react";
 import { FakeMapConstructor, resetMapLibreFake } from "testing/mapLibreFake";
@@ -86,8 +86,8 @@ describe("useDualMaps (two panes)", () => {
     expect(right.getZoom()).toBe(11);
   });
 
-  describe("known drift (plan §2.2(2)–(4))", () => {
-    test.failing("sends the user's token with requests to our API, on both panes", () => {
+  describe("matches the single pane (fixed drift, plan §2.2(2)–(4))", () => {
+    test("sends the user's token with requests to our API, on both panes", () => {
       renderDual();
       expect(builtMaps()).toHaveLength(2);
       builtMaps().forEach((map) => {
@@ -98,7 +98,7 @@ describe("useDualMaps (two panes)", () => {
       });
     });
 
-    test.failing("starts both panes from the default base style when the page sets none", () => {
+    test("starts both panes from the default base style when the page sets none", () => {
       renderDual();
       expect(builtMaps()).toHaveLength(2);
       builtMaps().forEach((map) => {
@@ -106,7 +106,7 @@ describe("useDualMaps (two panes)", () => {
       });
     });
 
-    test.failing("removes both maps when the panes unmount", () => {
+    test("removes both maps when the panes unmount", () => {
       const { unmount } = renderDual();
       const maps = builtMaps();
       expect(maps).toHaveLength(2);
@@ -114,7 +114,7 @@ describe("useDualMaps (two panes)", () => {
       maps.forEach((map) => expect(map.inspect().removed).toBe(true));
     });
 
-    test.failing("stops syncing the panes when they unmount", () => {
+    test("stops syncing the panes when they unmount", () => {
       const { unmount } = renderDual();
       const [left, right] = builtMaps();
       unmount();
