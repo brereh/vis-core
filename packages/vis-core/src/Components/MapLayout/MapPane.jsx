@@ -1,5 +1,5 @@
 import "maplibre-gl/dist/maplibre-gl.css";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import maplibregl from "maplibre-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -46,6 +46,18 @@ const PaneContainer = styled.div`
   width: 100%;
   height: 100%;
   overflow: hidden;
+`;
+
+const ContextLostMessage = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.92);
 `;
 
 const DRAW_STYLES = [
@@ -129,6 +141,21 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
         .map(([name]) => name),
     [state.visualisations, pane]
   );
+
+  // If the browser drops the map's WebGL context (it keeps only so many, about 16), the map
+  // stops drawing. Say so rather than leave a blank or frozen map.
+  const [contextLost, setContextLost] = useState(false);
+  useEffect(() => {
+    if (!map) return undefined;
+    const lost = () => setContextLost(true);
+    const restored = () => setContextLost(false);
+    map.on("webglcontextlost", lost);
+    map.on("webglcontextrestored", restored);
+    return () => {
+      map.off("webglcontextlost", lost);
+      map.off("webglcontextrestored", restored);
+    };
+  }, [map]);
 
   // --- registration ----------------------------------------------------------------------
 
@@ -616,7 +643,13 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
   }, [map, state.visualisedFeatureIds]);
 
   return (
-    <PaneContainer ref={containerRef} data-pane-id={paneId}>
+    <PaneContainer ref={containerRef} data-pane-id={paneId} aria-label={pane.title} role={pane.title ? "region" : undefined}>
+      {contextLost && (
+        <ContextLostMessage role="alert">
+          This map can no longer be drawn: the browser ran out of graphics resources. Reload the
+          page to show it again.
+        </ContextLostMessage>
+      )}
       {paneLayers.map((layer, index) => (
         <React.Fragment key={layer.name || layer.id || index}>
           <Layer layer={layer} map={readyMap} paneId={paneId} />

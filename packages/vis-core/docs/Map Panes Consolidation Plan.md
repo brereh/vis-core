@@ -547,6 +547,37 @@ Map-click filters also change on dual pages:
 
 *Exit:* `resolveMapGrid` tests, plus `MapGrid` tests for a 2×2 grid, a spanning cell, an independent pane and an opted-out pane.
 
+**Phase 4 result.** Full suite: 120 suites and 1063 tests, all passing.
+
+- **Grid config.** `resolveMapGrid` reads `config.grid` on any map page (a `DualMapLayout` page with a grid uses the grid):
+  - `columns` and `rows` take a count or a list of relative sizes
+  - each cell takes placement, spans, title, visualisations, layers, sync group and classification, with the defaults in §3.3
+  - every cell stays in the grid, but only `map` cells become panes; other types render an empty cell for now
+- **Validation.** Problems don't throw. They come back as warnings, with safe fallbacks:
+  - bad sizes
+  - missing or repeated ids
+  - unknown cell types
+  - placement values that aren't positive whole numbers
+  - cells outside the grid, or overlapping
+  - visualisations or layers the page doesn't define
+  - unknown classification values
+  - a grid with no map cells (the page falls back to its preset)
+  - more than 4 map panes
+
+  `filterPaneWarnings` names filters that target panes the grid doesn't have. `MapContext` logs all of them in development only (when the app's bundler sets `process.env.NODE_ENV` to `development`), prefixed with the page name.
+- **Layout.** `MapGrid` turns the sizes into grid tracks and renders cells through a registry of cell types (only `map` for now).
+- **Panes:**
+  - A pane without a sync group neither moves with nor shares hover and popups with the others.
+  - A pane with `classification: "own"` classifies over its own data only.
+  - A titled pane is a labelled region.
+- **Legend.** `PageLegend` shows a legend per classification group. A page with one group shows a single legend, exactly as before. With several groups, the legends stack in the bottom-right corner, each headed with its panes' titles. Each group's legend lists its last pane with data. `DynamicLegend` gains `title` and `stacked` props.
+- **Context loss.** If the browser drops a pane's WebGL context, the pane says the map can't be drawn and asks for a reload. The message clears if the context comes back.
+- **No change on presets.** Single and side-by-side pages behave as after Phase 3.
+- **Not yet:**
+  - A legend for a pane with its own classification lists that pane's layers and colours, but its band editor and histogram data still come from the page copy (all panes' data). Phase 5 moves `DynamicLegend` onto the selectors.
+  - Feature focus moves the primary pane and its sync group. Panes in other groups aren't fitted, because the request doesn't say which panes it is for. That comes with the targeting work in Phase 5.
+  - Per-pane style controls are deferred (§8).
+
 ### Phase 5: Explicit targeting and UI
 - Document `filter.panes` and add the dev warning for the legacy rules.
 - Group sidebar filters by pane title.

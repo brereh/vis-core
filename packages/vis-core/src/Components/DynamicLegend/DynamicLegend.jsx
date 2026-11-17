@@ -12,7 +12,7 @@ import { useFetchVisualisationData } from "hooks/useFetchVisualisationData";
 import { useIsMobile } from "hooks/useIsMobile";
 import { PageContext } from "contexts/PageContext";
 import { useAppContext } from "contexts/AppContext";
-import { LegendContainer } from "./DynamicLegend.styles";
+import { LegendContainer, LegendTitle } from "./DynamicLegend.styles";
 import {
   interpolateWidths,
   interpretColorExpression,
@@ -33,9 +33,13 @@ import LegendLayerGroup from "./LegendLayerGroup";
 *
 * @component
 * @property {Object} map - The map instance from Mapbox or MapLibre.
+* @property {string} [title] - A heading, when the page shows several legends (one per group of
+*   map panes that share colour classes).
+* @property {boolean} [stacked=false] - Lay the legend out inside a stack of legends instead of
+*   placing it over the map.
 * @returns {JSX.Element|null} The rendered legend component or null if there are no legend items.
  */
-export const DynamicLegend = ({ map }) => {
+export const DynamicLegend = ({ map, title, stacked = false }) => {
   const isMobile = useIsMobile();
   const [legendItems, setLegendItems] = useState([]);
   const { state } = useMapContext();
@@ -437,7 +441,8 @@ export const DynamicLegend = ({ map }) => {
   }
 
   const content = (
-    <LegendContainer ref={legendRef} $outside={isMobile}>
+    <LegendContainer ref={legendRef} $outside={isMobile} $stacked={stacked && !isMobile}>
+      {title && <LegendTitle>{title}</LegendTitle>}
       {legendItems.map((item, index) => (
         <LegendLayerGroup
           key={item.layerId}

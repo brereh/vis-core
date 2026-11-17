@@ -23,6 +23,17 @@ import { BASE_MAPS, DEFAULT_BASE_MAP_ID, getBaseMap } from "../map/baseMaps";
 import { readBaseMapPreference, writeBaseMapPreference } from "../map/baseMapPreference";
 import { resolveMapGrid } from "../map/resolveMapGrid";
 import { resolveFilterPanes } from "../map/resolveFilterPanes";
+import { filterPaneWarnings } from "../map/resolveMapGrid";
+
+/**
+ * Reports problems in a page's grid config, in development only. The app's bundler sets
+ * `process.env.NODE_ENV` (the library build leaves it to the app); without it, nothing is logged.
+ */
+const reportGridWarnings = (pageName, warnings) => {
+  const isDevelopment = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+  if (!isDevelopment || warnings.length === 0) return;
+  warnings.forEach((warning) => console.error(`[MapGrid] ${pageName}: ${warning}`));
+};
 
 // Create a context for the app configuration
 export const MapContext = createContext();
@@ -169,7 +180,12 @@ export const MapProvider = ({ children }) => {
   // This is independent of filter init and runs immediately on page change.
   useEffect(() => {
     dispatch({ type: actionTypes.SET_IS_LOADING });
-    dispatch({ type: actionTypes.SET_MAP_GRID, payload: resolveMapGrid(pageContext) });
+    const mapGrid = resolveMapGrid(pageContext);
+    reportGridWarnings(pageContext.pageName, [
+      ...mapGrid.warnings,
+      ...filterPaneWarnings(pageContext.config?.filters, mapGrid),
+    ]);
+    dispatch({ type: actionTypes.SET_MAP_GRID, payload: mapGrid });
 
     // Initialise non-parameterised layers
     pageContext.config.layers
