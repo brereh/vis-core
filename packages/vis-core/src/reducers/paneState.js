@@ -168,18 +168,19 @@ export function applyLayerParam(layer, state, { layerName, paramName, value, pan
   const params = { [paramName]: value };
   const withoutParam = (list) => (list || []).filter((param) => param !== paramName);
 
-  if (!(layer.separatePanePaths || layer.separateSidePaths)) {
-    return {
-      ...layer,
-      path: updateUrlParameters(layer.pathTemplate, layer.path, params),
-      missingParams: withoutParam(layer.missingParams),
-    };
-  }
+  const singlePath = () => ({
+    ...layer,
+    path: updateUrlParameters(layer.pathTemplate, layer.path, params),
+    missingParams: withoutParam(layer.missingParams),
+  });
+  if (!(layer.separatePanePaths || layer.separateSidePaths)) return singlePath();
 
   const { showing, targets, coversAll } = targetsAmong(
     panesShowing(gridOf(state), { layer: layerName }),
     panes
   );
+  // A layer no pane shows has nothing to keep per pane.
+  if (showing.length === 0) return singlePath();
   const panePaths = { ...(layer.panePaths ?? Object.fromEntries(showing.map((id) => [id, layer.path]))) };
   const paneMissingParams = {
     ...(layer.paneMissingParams ??

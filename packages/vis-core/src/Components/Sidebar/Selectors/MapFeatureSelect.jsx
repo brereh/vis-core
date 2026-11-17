@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { resolveFilterPanes } from "../../../map/resolveFilterPanes";
+import { selectMapGrid } from "../../../reducers/mapSelectors";
 import styled from 'styled-components';
 import { FaMousePointer, FaDrawPolygon } from 'react-icons/fa';
 import { useMapContext } from "hooks/useMapContext";
@@ -75,6 +77,18 @@ const EnableSelectButton = styled.button`
 `;
 
 /**
+ * The map pane a feature-select filter targets. Filters from the page's sidebar carry their
+ * resolved `panes`; others (such as download-section filters) are resolved here, with the
+ * same rules.
+ *
+ * @param {Object} filter
+ * @param {Object} mapState
+ * @returns {string|undefined}
+ */
+export const filterTargetPane = (filter, mapState) =>
+  (filter?.panes ?? (filter ? resolveFilterPanes(filter, selectMapGrid(mapState)).panes : []))[0];
+
+/**
  * Gets the path to look up a layer's features. For a layer with a path per map pane, uses
  * the target pane's path, or another pane's whose params are all set if the target's aren't.
  *
@@ -146,7 +160,7 @@ export const BaseMapFeatureSelect = ({ key, filter, value, onChange, showControl
   
 
   // Ensure layer and its properties are defined
-  const layerPath = getFeatureLookupPath(layer, filter?.panes?.[0]);
+  const layerPath = getFeatureLookupPath(layer, filterTargetPane(filter, mapState));
 
   /**
    * Handles the change in selected options from the dropdown.

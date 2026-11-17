@@ -21,6 +21,7 @@ import {
   getMetricDefinition,
 } from "utils/map";
 import { getVisualisationDisplayMode } from "utils/displayMode";
+import { selectMapGrid, selectPaneView } from "../../../reducers/mapSelectors";
 
 /**
  * Styled container for the layer control entry.
@@ -321,9 +322,16 @@ export const LayerControlEntry = memo(
     const selectedMetricParamName = currentPage.config.filters.find(
       (filter) => filter.containsLegendInfo === true
     );
-    // Every pane shares the page's copy of a visualisation (panes differ only in params), so
-    // it holds the style and display mode the controls need, on any page layout.
-    const visualisation = state.visualisations[Object.keys(state.visualisations)[0]];
+    // The controls describe what the primary pane draws (the left one on a side-by-side page):
+    // the page's visualisation with that pane's own params and data. On a single-map page
+    // that is the page's copy itself.
+    const firstVisualisationName = Object.keys(state.visualisations)[0];
+    const primaryPaneId = selectMapGrid(state).primaryPaneId;
+    const visualisation = useMemo(
+      () => selectPaneView(state, primaryPaneId, firstVisualisationName),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [state.visualisations, state.paneOverrides, state.paneData, primaryPaneId, firstVisualisationName]
+    );
 
     const colorStyle = useMemo(() => {
       // Use the resolved colorStyle from layer metadata if available, otherwise derive from visualization style

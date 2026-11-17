@@ -55,16 +55,6 @@ let mockMapContext = {
       },
     },
     map: {},
-    maps: [
-      {
-        getLayer: jest.fn(),
-        removeLayer: jest.fn(),
-        removeSource: jest.fn(),
-        getSource: jest.fn(),
-        addSource: jest.fn(),
-        addLayer: jest.fn(),
-      },
-    ],
     paramNameToUuidMap: {
       paramToReplace1: "first",
       paramToReplace2: "second",
@@ -73,12 +63,6 @@ let mockMapContext = {
       visualisationName: {},
     },
     colorSchemesByLayer: {
-      visualisationName: {},
-    },
-    leftVisualisations: {
-      visualisationName: {},
-    },
-    rightVisualisations: {
       visualisationName: {},
     },
   },

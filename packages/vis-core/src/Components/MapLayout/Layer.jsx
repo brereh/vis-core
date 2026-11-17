@@ -1,5 +1,6 @@
 import { useEffect, useContext, useMemo, useRef } from "react";
 import { selectMaps, selectPaneOfMap } from "../../reducers/mapSelectors";
+import { useShallowStableArray } from "hooks/usePaneVisualisation";
 import { api } from "services";
 import {
   appendQueryParams,
@@ -44,12 +45,9 @@ export const Layer = ({ layer }) => {
   // Access the map context to get the current map instance(s)
   const { state, dispatch } = useMapContext();
   const { paramNameToUuidMap } = state;
-  // The registered pane maps. Memoised so effects keyed on it only re-run when a map changes.
-  const paneMaps = useMemo(
-    () => selectMaps(state),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.mapsByPane, state.map, state.mapGrid]
-  );
+  // The registered pane maps, kept as the same array while the maps are the same, so effects
+  // keyed on it only re-run when a map changes.
+  const paneMaps = useShallowStableArray(selectMaps(state));
 
   // Whether the dark base map is currently active
   const currentBaseMap = getBaseMap(state.baseMapId);

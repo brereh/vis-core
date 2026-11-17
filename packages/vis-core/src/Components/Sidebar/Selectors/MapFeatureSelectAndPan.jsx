@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMapContext } from "hooks/useMapContext";
-import { BaseMapFeatureSelect, getFeatureLookupPath } from './MapFeatureSelect';
+import { BaseMapFeatureSelect, filterTargetPane, getFeatureLookupPath } from './MapFeatureSelect';
 import { api } from 'services';
 import { actionTypes } from 'reducers/mapReducer';
 
@@ -32,7 +32,7 @@ export const MapFeatureSelectAndPan = ({ filter, onChange, ...props }) => {
       `Layer '${filter.layer}' not found in mapState while attempting to instantiate a mapFeatureSelect filter.`
     );
   }
-  const layerPath = getFeatureLookupPath(layer, filter?.panes?.[0]);
+  const layerPath = getFeatureLookupPath(layer, filterTargetPane(filter, mapState));
 
   /**
    * Handles the change in selected options from the dropdown.

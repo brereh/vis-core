@@ -3,7 +3,7 @@
  * pane's tiles.
  *
  * Only the probes (`renderLayerOnPanes`) know how panes render layers today: DualMaps renders
- * every <Layer> once per pane, and each instance adds itself to every map in `state.maps`.
+ * every <Layer> once per pane, and each instance adds itself to every registered pane map.
  * Phase 3 of docs/Map Panes Consolidation Plan.md gives each pane its own <Layer map=…>, and
  * only the probes change.
  *

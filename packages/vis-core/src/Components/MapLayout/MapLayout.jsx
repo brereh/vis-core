@@ -56,6 +56,17 @@ const MobileLegendSlot = styled.section`
 `;
 
 /**
+ * The panes a filter's action targets: the filter's own, unless the action's payload in the
+ * page config names its own target (`panes`, or the legacy `sides`), which then wins.
+ *
+ * @param {Object} filter - The filter, with its resolved `panes`.
+ * @param {Object} [actionPayload] - The action's configured payload.
+ * @returns {{ panes?: string[] }} To spread into the dispatched payload.
+ */
+const filterPanesUnlessActionTargets = (filter, actionPayload) =>
+  actionPayload?.panes || actionPayload?.sides ? {} : { panes: filter.panes };
+
+/**
  * MapLayout component is the main layout component that composes the Map,
  * Sidebar, and MapLayerSection components. It serves as the container for
  * the map visualisation and its associated controls.
@@ -118,7 +129,12 @@ export const MapLayout = () => {
 
           dispatch({
             type: actionObj.action,
-            payload: { filter, value: defaultValue, panes: filter.panes, ...actionObj.payload },
+            payload: {
+              filter,
+              value: defaultValue,
+              ...filterPanesUnlessActionTargets(filter, actionObj.payload),
+              ...actionObj.payload,
+            },
           });
         });
       });
@@ -173,7 +189,12 @@ export const MapLayout = () => {
    */
   const buildFilterActionPayload = useCallback((filter, action, value) => {
     const selectedOptions = getSelectedFilterOptions(filter, value);
-    const payload = { filter, value, panes: filter.panes, ...action.payload };
+    const payload = {
+      filter,
+      value,
+      ...filterPanesUnlessActionTargets(filter, action.payload),
+      ...action.payload,
+    };
 
     if (action.action === "UPDATE_COLOR_SCHEME") {
       const colourValue = selectedOptions.find((option) => option.colourValue)?.colourValue;

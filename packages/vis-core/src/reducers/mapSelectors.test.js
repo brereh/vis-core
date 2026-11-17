@@ -6,6 +6,7 @@ import {
   selectPaneMap,
   selectPaneOfMap,
   selectPanesShowing,
+  selectPaneView,
   selectPaneVisualisation,
 } from "./mapSelectors";
 import { usePaneVisualisation, useShallowStableArray } from "../hooks/usePaneVisualisation";
@@ -126,5 +127,29 @@ describe("maps", () => {
 
   it("lists the panes showing something", () => {
     expect(selectPanesShowing({ mapGrid: grid }, { visualisation: VIS })).toEqual(["left", "right"]);
+  });
+});
+
+describe("selectPaneView", () => {
+  it("gives a pane its own params and data", () => {
+    const leftData = [{ id: 1 }];
+    const state = {
+      mapGrid: grid,
+      visualisations: { [VIS]: { ...visualisation, data: [...leftData, { id: 2 }] } },
+      paneOverrides: { left: { [VIS]: { queryParams: { year: { value: 2050, required: true } } } } },
+      paneData: { left: { [VIS]: leftData } },
+    };
+    const left = selectPaneView(state, "left", VIS);
+    expect(left.data).toBe(leftData);
+    expect(left.queryParams.year.value).toBe(2050);
+    expect(left.style).toBe("polygon-continuous");
+  });
+
+  it("returns the page's copy when the pane's data is the page's data", () => {
+    const data = [{ id: 1 }];
+    const page = { ...visualisation, data };
+    const state = { visualisations: { [VIS]: page }, paneOverrides: {}, paneData: { main: { [VIS]: data } } };
+    expect(selectPaneView(state, "main", VIS)).toBe(page);
+    expect(selectPaneView({ visualisations: { [VIS]: page } }, "main", VIS)).toBe(page);
   });
 });

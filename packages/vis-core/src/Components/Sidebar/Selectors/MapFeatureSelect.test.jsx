@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { BaseMapFeatureSelect, getFeatureLookupPath } from ".";
+import { filterTargetPane } from "./MapFeatureSelect";
+import { resolveMapGrid } from "../../../map/resolveMapGrid";
 import { MapContext } from "contexts";
 import userEvent from "@testing-library/user-event";
 
@@ -230,5 +232,20 @@ describe("getFeatureLookupPath", () => {
     };
     expect(getFeatureLookupPath(layer)).toBe("/api/tiles/single");
     expect(getFeatureLookupPath(layer, "right")).toBe("/api/tiles/single");
+  });
+});
+
+describe("filterTargetPane", () => {
+  const dual = { mapGrid: resolveMapGrid({ type: "DualMapLayout" }) };
+
+  it("uses the panes MapContext resolved for sidebar filters", () => {
+    expect(filterTargetPane({ panes: ["right"], filterName: "Zone" }, dual)).toBe("right");
+  });
+
+  it("resolves filters that never went through MapContext, such as download filters", () => {
+    expect(filterTargetPane({ filterName: "Right zone" }, dual)).toBe("right");
+    expect(filterTargetPane({ filterName: "Zone", sides: "right" }, dual)).toBe("right");
+    expect(filterTargetPane({ filterName: "Zone" }, dual)).toBe("left");
+    expect(filterTargetPane({ filterName: "Right zone" }, {})).toBe("main");
   });
 });

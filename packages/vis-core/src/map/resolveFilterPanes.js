@@ -12,16 +12,19 @@ const LEGACY_SIDES = {
 };
 
 /**
- * Today's name rules for side-by-side pages: a filter on a visualisation whose name contains
- * "Side" targets the left or right pane if its name contains "Left" or "Right", and both
- * otherwise. Returns null for filters the rules don't cover.
+ * The legacy name rules for side-by-side pages: a filter whose name contains "Left" or
+ * "Right" targets that pane; any other filter on a visualisation whose name contains "Side"
+ * targets both. Returns null for filters the rules don't cover.
+ *
+ * The Left/Right rule applies whatever the visualisation is called, as the legacy code did
+ * when setting initial values and when picking a feature-lookup side.
  */
 function legacyNamedSide(filter) {
-  if (!filter.visualisations?.[0]?.includes("Side")) return null;
   const name = filter.filterName ?? "";
   if (name.includes("Left")) return "left";
   if (name.includes("Right")) return "right";
-  return "both";
+  if (filter.visualisations?.[0]?.includes("Side")) return "both";
+  return null;
 }
 
 const isDualPreset = (grid) => grid.preset === "dual";
@@ -36,7 +39,7 @@ const isDualPreset = (grid) => grid.preset === "dual";
  * 4. The panes showing any of the filter's visualisations; failing that, those showing
  *    `filter.layer`; failing that, every pane.
  *
- * Unknown pane ids are dropped; if none is left, the filter falls back to step 4.
+ * Unknown pane ids are dropped; if none is left, resolution carries on with step 2.
  *
  * @param {Object} filter - Filter config.
  * @param {Object} grid - From `resolveMapGrid`.

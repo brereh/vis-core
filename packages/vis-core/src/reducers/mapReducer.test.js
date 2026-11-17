@@ -89,8 +89,10 @@ describe("mapReducer categorical legend cache", () => {
       visualisations: { visA: { id: "visA" } },
       colorSchemesByLayer: { layerA: { value: "YlGnBu", label: "YlGnBu" } },
       filters: [{ id: "filter-a" }],
-      leftVisualisations: { leftA: {} },
-      rightVisualisations: { rightA: {} },
+      mapsByPane: { main: { id: "map" } },
+      map: { id: "map" },
+      paneOverrides: { main: { visA: { queryParams: { a: { value: 1 } } } } },
+      paneData: { main: { visA: [1] } },
       isLoading: false,
       pageIsReady: true,
       selectionMode: "single",
@@ -108,6 +110,10 @@ describe("mapReducer categorical legend cache", () => {
     expect(nextState.layers).toEqual({});
     expect(nextState.visualisations).toEqual({});
     expect(nextState.filters).toEqual([]);
+    expect(nextState.mapsByPane).toEqual({});
+    expect(nextState.map).toBeNull();
+    expect(nextState.paneOverrides).toEqual({});
+    expect(nextState.paneData).toEqual({});
   });
 
   it("clears the categorical legend cache explicitly", () => {

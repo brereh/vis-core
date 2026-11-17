@@ -82,10 +82,25 @@ describe("resolveFilterPanes", () => {
       });
     });
 
-    it("ignores the name rules for visualisations without 'Side' in their name", () => {
+    it("applies the Left/Right rule whatever the visualisation is called", () => {
       expect(resolve({ filterName: "Scenario Left", visualisations: ["Flows"] }, dual)).toMatchObject({
+        panes: ["left"],
+        source: "names",
+      });
+      expect(resolve({ filterName: "Right zone", layer: "Zones" }, dual).panes).toEqual(["right"]);
+    });
+
+    it("leaves other filters on visualisations without 'Side' to the default", () => {
+      expect(resolve({ filterName: "Year", visualisations: ["Flows"] }, dual)).toMatchObject({
         panes: ["left", "right"],
         source: "default",
+      });
+    });
+
+    it("carries on to the legacy rules when none of the explicit panes exist", () => {
+      expect(resolve({ panes: ["nowhere"], filterName: "Scenario Right" }, dual)).toMatchObject({
+        panes: ["right"],
+        source: "names",
       });
     });
 

@@ -520,3 +520,58 @@ describe("map-click filters on dual maps", () => {
     );
   });
 });
+
+describe("actions that name their own target", () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it("keep the panes or sides set on the action in the page config", () => {
+    const filter = {
+      id: "scenario",
+      type: "dropdown",
+      filterName: "Scenario",
+      paramName: "scenario",
+      visualisations: ["Zone Pairs"],
+      panes: ["left", "right"],
+      actions: [
+        { action: "UPDATE_DUAL_QUERY_PARAMS", payload: { sides: "right" } },
+        { action: "UPDATE_QUERY_PARAMS", payload: { panes: ["left"] } },
+        { action: "UPDATE_PATH_PARAMS" },
+      ],
+    };
+    const mapContext = {
+      ...mockMapContext,
+      dispatch: jest.fn(),
+      state: {
+        ...mockMapContext.state,
+        mapGrid: resolveMapGrid({ type: "DualMapLayout" }),
+        filters: [filter],
+      },
+    };
+    render(
+      <ThemeProvider theme={theme}>
+        <AppContext.Provider value={mockAppContexte}>
+          <PageContext.Provider value={mockPageContext}>
+            <FilterContext.Provider value={{ ...mockFilterContext, state: { scenario: "B" } }}>
+              <MapContext.Provider value={mapContext}>
+                <MapLayout />
+              </MapContext.Provider>
+            </FilterContext.Provider>
+          </PageContext.Provider>
+        </AppContext.Provider>
+      </ThemeProvider>
+    );
+
+    const payloadsFor = (type) =>
+      mapContext.dispatch.mock.calls.map(([a]) => a).filter((a) => a.type === type).map((a) => a.payload);
+
+    payloadsFor("UPDATE_DUAL_QUERY_PARAMS").forEach((payload) => {
+      expect(payload.sides).toBe("right");
+      expect(payload.panes).toBeUndefined();
+    });
+    payloadsFor("UPDATE_QUERY_PARAMS").forEach((payload) => expect(payload.panes).toEqual(["left"]));
+    payloadsFor("UPDATE_PATH_PARAMS").forEach((payload) => expect(payload.panes).toEqual(["left", "right"]));
+    expect(payloadsFor("UPDATE_DUAL_QUERY_PARAMS").length).toBeGreaterThan(0);
+    expect(payloadsFor("UPDATE_QUERY_PARAMS").length).toBeGreaterThan(0);
+    expect(payloadsFor("UPDATE_PATH_PARAMS").length).toBeGreaterThan(0);
+  });
+});

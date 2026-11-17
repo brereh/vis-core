@@ -54,6 +54,23 @@ export const selectPaneData = (state, paneId, visualisationName) =>
   state.paneData?.[paneId]?.[visualisationName];
 
 /**
+ * Everything one pane shows for a visualisation: its params (see `selectPaneVisualisation`)
+ * and its own data rather than all panes' data together. Returns the page's copy itself when
+ * neither differs, as on a single-map page.
+ *
+ * @param {Object} state
+ * @param {string} paneId
+ * @param {string} visualisationName
+ * @returns {Object|undefined}
+ */
+export function selectPaneView(state, paneId, visualisationName) {
+  const visualisation = selectPaneVisualisation(state, paneId, visualisationName);
+  const data = selectPaneData(state, paneId, visualisationName);
+  if (!visualisation || data === undefined || data === visualisation.data) return visualisation;
+  return { ...visualisation, data };
+}
+
+/**
  * The panes whose data a pane's colour classes are computed from: the panes showing the
  * visualisation that share classification, or just the pane if it classifies on its own.
  *

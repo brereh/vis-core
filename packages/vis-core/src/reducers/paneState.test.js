@@ -183,6 +183,45 @@ describe("applyLayerParam", () => {
   });
 });
 
+describe("applyLayerParam with separate pane paths", () => {
+  const template = "/tiles/{z}/{x}/{y}?spec={spec}&year={year}";
+  const layer = () => ({
+    pathTemplate: template,
+    path: template,
+    missingParams: ["spec", "year"],
+    separatePanePaths: true,
+  });
+  const set = (current, s, paramName, value, panes) =>
+    applyLayerParam(current, s, { layerName: "links", paramName, value, panes });
+
+  it("changes every pane and layer.path when every pane showing the layer is targeted", () => {
+    const next = set(layer(), state(), "year", 2030, null);
+    expect(next.path).toBe("/tiles/{z}/{x}/{y}?spec={spec}&year=2030");
+    expect(next.panePaths.left).toBe(next.path);
+    expect(next.panePaths.right).toBe(next.path);
+  });
+
+  it("keeps a param missing until every pane showing the layer has it, across several params", () => {
+    let next = set(layer(), state(), "spec", "A", ["left"]);
+    next = set(next, state(), "year", 2030, null);
+    expect(next.missingParams).toEqual(["spec"]);
+    next = set(next, state(), "spec", "B", ["right"]);
+    expect(next.missingParams).toEqual([]);
+    expect(next.panePaths).toEqual({
+      left: "/tiles/{z}/{x}/{y}?spec=A&year=2030",
+      right: "/tiles/{z}/{x}/{y}?spec=B&year=2030",
+    });
+  });
+
+  it("keeps one path for a layer shown in no pane", () => {
+    const hidden = { ...state(), mapGrid: { ...dualGrid(), panes: dualGrid().panes.map((p) => ({ ...p, layers: [] })) } };
+    const next = set(layer(), hidden, "spec", "A", ["left"]);
+    expect(next.path).toBe("/tiles/{z}/{x}/{y}?spec=A&year={year}");
+    expect(next.panePaths).toBeUndefined();
+    expect(next.missingParams).toEqual(["year"]);
+  });
+});
+
 describe("pane maps", () => {
   const left = { name: "left" };
   const right = { name: "right" };
