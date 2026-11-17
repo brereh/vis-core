@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { resolveFilterPanes } from "../../../map/resolveFilterPanes";
-import { selectMapGrid } from "../../../reducers/mapSelectors";
+import { selectDrawPaneId, selectMapGrid, selectPaneMap } from "../../../reducers/mapSelectors";
 import styled from 'styled-components';
 import { FaMousePointer, FaDrawPolygon } from 'react-icons/fa';
 import { useMapContext } from "hooks/useMapContext";
@@ -124,7 +124,9 @@ export const getFeatureLookupPath = (layer, targetPane) => {
  */
 export const BaseMapFeatureSelect = ({ key, filter, value, onChange, showControls, disabled, excludeValue, ...props }) => {
   const { state: mapState } = useMapContext();
-  const { map } = mapState;
+  // Select on the pane hosting the draw control (the primary pane unless the page's
+  // feature-select filters target another).
+  const map = selectPaneMap(mapState, selectDrawPaneId(mapState)) ?? mapState.map;
   const prevTransformedFeaturesRef = useRef();
   const [isFeatureSelectActive, setFeatureSelectActive] = useState(false);
   const [selectionMode, setSelectionMode] = useState("feature");

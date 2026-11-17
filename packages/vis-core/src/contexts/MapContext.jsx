@@ -21,7 +21,8 @@ import { api } from "services";
 import { useMetadataDrivenFilters } from "hooks/useMetadataDrivenFilters";
 import { BASE_MAPS, DEFAULT_BASE_MAP_ID, getBaseMap } from "../map/baseMaps";
 import { readBaseMapPreference, writeBaseMapPreference } from "../map/baseMapPreference";
-import { resolveFilterPanes } from "../map/resolveFilterPanes";
+import { drawPaneWarnings, legacyTargetingWarnings, resolveFilterPanes } from "../map/resolveFilterPanes";
+import { FEATURE_SELECT_FILTER_TYPES } from "../reducers/mapSelectors";
 import { filterPaneWarnings, resolveMapGrid } from "../map/resolveMapGrid";
 
 /**
@@ -183,6 +184,7 @@ export const MapProvider = ({ children }) => {
     reportGridWarnings(pageContext.pageName, [
       ...mapGrid.warnings,
       ...filterPaneWarnings(pageContext.config?.filters, mapGrid),
+      ...legacyTargetingWarnings(pageContext.config?.filters, mapGrid, pageContext.type),
     ]);
     dispatch({ type: actionTypes.SET_MAP_GRID, payload: mapGrid });
 
@@ -352,6 +354,7 @@ export const MapProvider = ({ children }) => {
         const { panes, paneScope } = resolveFilterPanes(filter, mapGrid);
         return { ...filter, panes, paneScope };
       });
+      reportGridWarnings(pageContext.pageName, drawPaneWarnings(filtersWithPanes, FEATURE_SELECT_FILTER_TYPES, mapGrid));
 
       // Report empty metadata filter warnings (non-fatal — page still loads behind error overlay).
       if (emptyMetadataFilters.length > 0) {

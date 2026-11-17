@@ -144,6 +144,26 @@ describe("MapLayerSection component test", () => {
     });
   });
 
+  it("lists each layer once across all panes, adding layers only later panes show", async () => {
+    mockMap2.getStyle.mockReturnValue({
+      layers: [
+        { id: "layer2", type: "line", source: "source2" },
+        { id: "layer3", type: "circle", source: "source3" },
+      ],
+    });
+    render(
+      <MapContext.Provider value={mockMapContext}>
+        <MapLayerSection {...props} />
+      </MapContext.Provider>
+    );
+    await waitFor(() => expect(screen.getByTestId("layer-layer3")).toBeInTheDocument());
+    expect(screen.getAllByTestId(/^layer-/).map((el) => el.dataset.testid)).toEqual([
+      "layer-layer1",
+      "layer-layer2",
+      "layer-layer3",
+    ]);
+  });
+
   it("Should filter out hover, select, and system layers", async () => {
     // Redefine the mock for this specific test
     mockMap1.getStyle.mockReturnValue({

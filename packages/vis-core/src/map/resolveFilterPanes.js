@@ -81,3 +81,57 @@ export function resolveFilterPanes(filter, grid) {
 
   return result(all, "default");
 }
+
+const filterLabel = (filter) => filter.filterName ?? filter.paramName ?? filter.id ?? "(unnamed)";
+
+/**
+ * Warnings for filters that pick their panes through the legacy side-by-side rules, so page
+ * authors can move them onto `panes`:
+ * - on the side-by-side preset, a filter targeted by its name ("Left"/"Right", or a "Side"
+ *   visualisation) rather than by `panes` or `sides`;
+ * - on a side-by-side page that has a grid, a filter with `sides` or a name the legacy rules
+ *   would have used, as those rules no longer apply there.
+ *
+ * @param {Object[]} filters - Filter configs.
+ * @param {Object} grid - From `resolveMapGrid`.
+ * @param {string} [pageType] - The page's type.
+ * @returns {string[]}
+ */
+export function legacyTargetingWarnings(filters, grid, pageType) {
+  const hasPanes = (filter) => filter.panes === "all" || (Array.isArray(filter.panes) && filter.panes.length > 0);
+  return (filters ?? []).flatMap((filter) => {
+    if (hasPanes(filter)) return [];
+    if (isDualPreset(grid)) {
+      return resolveFilterPanes(filter, grid).source === "names"
+        ? [`Filter "${filterLabel(filter)}" picks its panes from its name; give it "panes" instead.`]
+        : [];
+    }
+    if (pageType === "DualMapLayout" && grid.preset === "custom" && ((filter.sides ?? filter.side) || legacyNamedSide(filter))) {
+      return [
+        `Filter "${filterLabel(filter)}" relies on "sides" or its name to pick panes, which a page with a grid doesn't use; give it "panes" instead.`,
+      ];
+    }
+    return [];
+  });
+}
+
+/**
+ * A warning when the page's feature-select filters target different panes: there is one draw
+ * control, on the first one's pane, so the others select on that pane too.
+ *
+ * Configured grids only: presets keep the draw control on their primary pane.
+ *
+ * @param {Object[]} filters - Filters with resolved `panes`.
+ * @param {string[]} featureSelectTypes - The filter types that use the draw control.
+ * @param {Object} grid - From `resolveMapGrid`.
+ * @returns {string[]}
+ */
+export function drawPaneWarnings(filters, featureSelectTypes, grid) {
+  if (grid?.preset !== "custom") return [];
+  const selects = (filters ?? []).filter((filter) => featureSelectTypes.includes(filter.type));
+  const firstPanes = selects.map((filter) => filter.panes?.[0]).filter(Boolean);
+  if (new Set(firstPanes).size <= 1) return [];
+  return [
+    `Feature-select filters target different panes (${[...new Set(firstPanes)].join(", ")}); all of them select on "${firstPanes[0]}", where the draw control is.`,
+  ];
+}

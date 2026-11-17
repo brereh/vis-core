@@ -252,7 +252,7 @@ Each item below is extracted in Phase 1 as a pure module plus a hook, written on
 | `useViewportFilters` | A `mapViewport` filter reads the bbox from its first target pane. Inside a sync group every pane's bbox is the same. |
 | `useFeatureFocus` | `mapBoundsAndCentroid` fits the first target pane; its sync group follows through `syncMaps`, and target panes in other groups are fitted as well. The temporary label is added to each target pane and its group. |
 | `useLabelLayers`, `useVisualisedFeatureFilter` | Per pane, for that pane's layers. |
-| `useDrawControl` | One `MapboxDraw` instance, on the pane targeted by the page's feature-select filter (`filter.panes[0]`), otherwise the primary pane. `state.drawPaneId` is added so `useFeatureSelect` queries the right map. If feature-select filters target different panes, a dev warning is logged (see §8). |
+| `useDrawControl` | One `MapboxDraw` instance, on the pane targeted by the page's feature-select filter (`filter.panes[0]`), otherwise the primary pane; presets keep it on the primary pane. `selectDrawPaneId(state)` (derived from the stored filters and grid rather than stored, so it can't go stale) tells `useFeatureSelect` which map to query. If feature-select filters target different panes, a dev warning is logged (see §8). |
 | `useZoomTracking` | `STORE_CURRENT_ZOOM` comes from the primary pane only, which is today's meaning. Per-group zoom is a follow-up (§8). |
 | `selectionHighlight.js` | `highlightSelectedFeature` from `DualMaps.jsx`, now shared. |
 
@@ -272,7 +272,7 @@ The `MapLayout` effect B2 skips `type: "map"` filters **only when they target mo
 - **`CalloutCardStack`** is rendered once and anchored to the grid container (`position: relative`). Behaviour is unchanged on single pages, and dual pages lose the duplicate stack.
 - **`PageLegend`** renders one `DynamicLegend` per classification group. Each one is given the map of the group's last pane with data (see the Phase 4 result). Phase 5 has it read the group's data through selectors rather than `state.visualisations[].data`.
   - Groups whose panes have titles show them as a heading. The presets have no titles, so they look as they do today.
-  - This replaces dual's "use whichever side has data" rule for choosing a legend.
+  - On configured grids, each group's legend lists the group's last pane with data for the first map visualisation the group shows. Preset pages keep dual's "use whichever side has data" rule.
   - The mobile legend slot portal is unchanged.
 - **`MapStyleToggle`** is rendered once at grid level (still off by default) and drives every pane through `useBaseMapTransition`.
 
@@ -315,7 +315,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 - one card stack instead of two
 - a filter that isn't side-specific and uses `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now affects both maps (it was silently dropped before, see §2.2(5))
 - which pane a filter targets is worked out once and used everywhere, so the same filter targets the same pane at load and afterwards (the Phase 2 result lists exactly what changes)
-- legend data comes from the classification group rather than the side with data (deferred to Phase 4 with `PageLegend`; until then dual pages keep the side-with-data rule)
+- (No change to the legend: it lists the right map unless only the left has data for the page's first visualisation, and its band editor and histogram use both panes' data together, which is what the page copy held.)
 
 **Single pages:**
 - clicking an empty area keeps the current map-filter highlight, so the highlight matches the filter value that is still applied (today it clears the highlight but keeps the value)
@@ -325,6 +325,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 
 **Both:**
 - `state.map` and the other map state are cleared when the page changes
+- on pages with several visualisations, a layer's controls in the sidebar describe the visualisation joined to that layer (`joinLayer`), as the legend already did, instead of the page's first visualisation (Phase 5)
 
 **Pre-merge check (before this work goes into `dev`):** run BaseApp's dual-map pages against each change, together with the downstream app configs the maintainers have to hand. In particular, find dual-page configs that:
 - send a filter through `UPDATE_*_PARAMS`, side-specific or not
@@ -535,7 +536,7 @@ Map-click filters also change on dual pages:
 **Not yet:**
 - grid configs other than the presets, independent panes and own classification (Phase 4)
 - `PageLegend`, with a legend section per classification group (Phase 4); for now the legend keeps the old rule
-- `state.drawPaneId` (Phase 5)
+- `selectDrawPaneId` (Phase 5; derived rather than stored as `state.drawPaneId`)
 - the manual check of BaseApp's dual pages on desktop and mobile: this environment has no running app with real configs and data, so it stays in the §4 pre-merge check before this work goes into `dev`
 
 **Pulled forward from Phase 4:** per-pane tile-cache sizing and the mobile one-column layout with a gap.
@@ -590,6 +591,33 @@ Map-click filters also change on dual pages:
 - Add `state.drawPaneId`.
 
 *Exit:* sidebar and layer-control tests on grid pages.
+
+**Phase 5 result.** Full suite: 123 suites and 1113 tests, all passing.
+
+- **Legacy targeting warnings.** `legacyTargetingWarnings` names, in development:
+  - filters on the side-by-side preset that pick their panes from their names
+  - filters on a side-by-side page with a grid that rely on `sides` or their names, which the grid doesn't use
+
+  This replaces Phase 4's blanket warning for any side-by-side page with a grid.
+- **Docs.** `docs/Map Grid.md` documents grids, `filter.panes`, the targeting order, and what targeting affects. Phase 6 adds the migration notes.
+- **Sidebar grouping.** `groupFiltersByPane` (§3.10) groups the filters when any pane has a title. Presets have no titles, so they keep a flat list. Each group is a labelled `section` under an `h3` heading.
+- **Layer controls:**
+  - `MapLayerSection` lists each layer once across every pane's style: the first pane's layers in order, then layers only later panes have.
+  - `LayerControlEntry` finds its visualisation with `selectVisualisationForLayer` (the one joined to the layer, otherwise the first). It describes it as drawn by `selectLayerControlPane`: the first pane showing the layer and visualisation, which is the left pane on side-by-side pages.
+  - Paint and visibility changes already reached only the maps that have the layer, through `getLinkedLayerIds`, so `selectMapsShowingLayer` wasn't needed.
+- **Legend on selectors.** `DynamicLegend` takes a `paneId`, defaulting to the primary pane, and `PageLegend` passes each group's legend pane:
+  - The band editor and histogram data come from `selectClassificationData`: the group's data together, or an own-classification pane's own data. On presets this equals the page copy's data.
+  - On configured grids, the legend text uses the legend pane's own params. Presets keep the page copy's.
+  - With several legends, untitled groups are headed with their pane ids.
+- **Callout cards** fetch and keep their own data and never read the map visualisations' `data`, so they needed no change.
+- **Draw control.** `selectDrawPaneId` puts the draw control on the first pane the page's first feature-select filter targets, on configured grids. Presets keep it on the primary pane. `BaseMapFeatureSelect` selects on that pane's map, and `drawPaneWarnings` logs a development warning when feature-select filters target different panes.
+- **Feature focus targeting.** Select-and-pan requests carry their filter's `panes`. `useFeatureFocus` moves one target pane per sync group (the rest of the group follows) and labels every target pane and its group. Without panes it moves the primary pane, as before.
+- **Carried from the Phase 4 review:**
+  - empty cells take no space on mobile
+  - the overlap warning says the dropped pane's filters won't apply
+  - §3.9 wording
+- **Data mirror.** `state.visualisations[].data` has no readers left, apart from `selectClassificationData`'s fallback for data stored without a pane and `selectPaneView`'s identity check. Phase 6 deletes it.
+- **No change on presets,** apart from the `joinLayer` rule for layer controls listed in §4.
 
 ### Phase 6: Docs and cleanup
 - Add `docs/Map Grid.md`: the config reference, the presets, and a migration note from `Left`/`Right` names and `separateSidePaths` to `panes` and `separatePanePaths`.

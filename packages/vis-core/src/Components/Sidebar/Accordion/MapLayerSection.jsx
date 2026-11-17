@@ -12,7 +12,8 @@ import { selectMaps } from "../../../reducers/mapSelectors";
 import { useShallowStableArray } from "../../../hooks/usePaneVisualisation";
 
 /**
- * MapLayerSection component represents a section for controlling map layers.
+ * MapLayerSection component represents a section for controlling map layers: one control per
+ * layer across all the page's panes, changing that layer on every pane that shows it.
  *
  * @component
  * @param {Object} props - The component props.
@@ -33,10 +34,18 @@ export const MapLayerSection = ({
 
   const updateLayers = useCallback(() => {
     if (maps.length > 0) {
-      const style = maps[0].getStyle();
-      if (!style || !style.layers) return;
-
-      const newLayers = style.layers;
+      // Every pane's layers, once each: the first pane's in its order, then layers only later
+      // panes show, in theirs. Each layer is described as the first pane showing it has it.
+      const styles = maps.map((map) => map.getStyle());
+      if (!styles.some((style) => style?.layers)) return;
+      const seen = new Set();
+      const newLayers = styles.flatMap((style) =>
+        (style?.layers ?? []).filter((layer) => {
+          if (seen.has(layer.id)) return false;
+          seen.add(layer.id);
+          return true;
+        })
+      );
       const appLayerIds = state.layers ? Object.keys(state.layers) : [];
       const hasAppLayers = appLayerIds.length > 0;
       const fallbackBaseSourceIds = hasAppLayers

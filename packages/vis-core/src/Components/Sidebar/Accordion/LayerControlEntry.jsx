@@ -21,7 +21,11 @@ import {
   getMetricDefinition,
 } from "utils/map";
 import { getVisualisationDisplayMode } from "utils/displayMode";
-import { selectMapGrid, selectPaneView } from "../../../reducers/mapSelectors";
+import {
+  selectLayerControlPane,
+  selectPaneView,
+  selectVisualisationForLayer,
+} from "../../../reducers/mapSelectors";
 
 /**
  * Styled container for the layer control entry.
@@ -322,15 +326,15 @@ export const LayerControlEntry = memo(
     const selectedMetricParamName = currentPage.config.filters.find(
       (filter) => filter.containsLegendInfo === true
     );
-    // The controls describe what the primary pane draws (the left one on a side-by-side page):
-    // the page's visualisation with that pane's own params and data. On a single-map page
-    // that is the page's copy itself.
-    const firstVisualisationName = Object.keys(state.visualisations)[0];
-    const primaryPaneId = selectMapGrid(state).primaryPaneId;
+    // The controls describe the visualisation joined to this layer (otherwise the page's
+    // first), as drawn by the first pane showing the layer (the left one on a side-by-side
+    // page): that pane's own params and data. On a single-map page that is the page's copy.
+    const visualisationName = selectVisualisationForLayer(state, layer.id);
+    const controlPaneId = selectLayerControlPane(state, layer.id, visualisationName);
     const visualisation = useMemo(
-      () => selectPaneView(state, primaryPaneId, firstVisualisationName),
+      () => selectPaneView(state, controlPaneId, visualisationName),
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [state.visualisations, state.paneOverrides, state.paneData, primaryPaneId, firstVisualisationName]
+      [state.visualisations, state.paneOverrides, state.paneData, controlPaneId, visualisationName]
     );
 
     const colorStyle = useMemo(() => {

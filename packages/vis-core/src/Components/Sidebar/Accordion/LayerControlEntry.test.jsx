@@ -664,4 +664,54 @@ describe("layer controls on a side-by-side page", () => {
       expect(queryParams.scenario.value).toBe("left only")
     );
   });
+
+  it("describe the visualisation joined to the layer, on the first pane showing the layer", () => {
+    const metricSpy = jest.spyOn(require("utils/map"), "getMetricDefinition");
+    const grid = resolveMapGrid({
+      type: "MapLayout",
+      config: {
+        layers: [{ name: "id" }, { name: "other" }],
+        visualisations: [
+          { name: "first", type: "joinDataToMap" },
+          { name: "joined", type: "joinDataToMap" },
+        ],
+        grid: {
+          columns: 2,
+          rows: 1,
+          cells: [
+            { id: "a", layers: ["other"], visualisations: ["first"] },
+            { id: "b", column: 2, layers: ["id"], visualisations: ["joined"] },
+          ],
+        },
+      },
+    });
+    const state = {
+      ...props.state,
+      layers: [],
+      mapGrid: grid,
+      visualisations: {
+        first: { id: "first", joinLayer: "other", style: "line-continuous", queryParams: { scenario: { value: "first", required: true } } },
+        joined: { id: "joined", joinLayer: "id", style: "line-continuous", queryParams: { scenario: { value: "page", required: true } } },
+      },
+      paneOverrides: { b: { joined: { queryParams: { scenario: { value: "pane b", required: true } } } } },
+      paneData: { b: { joined: [{ value: 1 }] } },
+    };
+    render(
+      <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
+        <PageContext.Provider value={mockPageContext}>
+          <AppContext.Provider value={mockAppContexte}>
+            <LayerControlEntry
+              {...props}
+              layer={{ ...props.layer, id: "id", metadata: { ...props.layer.metadata, isStylable: true } }}
+              state={state}
+            />
+          </AppContext.Provider>
+        </PageContext.Provider>
+      </MapContext.Provider>
+    );
+
+    const scenarios = metricSpy.mock.calls.map(([, , queryParams]) => queryParams.scenario.value);
+    expect(scenarios.length).toBeGreaterThan(0);
+    scenarios.forEach((scenario) => expect(scenario).toBe("pane b"));
+  });
 });

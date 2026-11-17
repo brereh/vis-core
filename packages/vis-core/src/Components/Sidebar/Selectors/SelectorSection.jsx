@@ -10,7 +10,7 @@ import { Slider } from "./Slider";
 import { Toggle } from "./Toggle";
 import { AppContext } from "contexts/AppContext";
 import { useToast } from "contexts/ToastContext";
-import { useState, useContext, useEffect, useCallback, useRef } from "react";
+import React, { useState, useContext, useEffect, useCallback, useRef } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { MapFeatureSelect, MapFeatureSelectWithControls } from "./MapFeatureSelect";
 import { CheckboxSelector } from './CheckboxSelector';
@@ -18,6 +18,8 @@ import { MapFeatureSelectAndPan } from './MapFeatureSelectAndPan';
 import { api } from "services";
 import { darken } from "polished";
 import { checkSecurityRequirements, trackClarityEvent } from "utils";
+import { selectMapGrid } from "../../../reducers/mapSelectors";
+import { groupFiltersByPane } from "./filterGroups";
 
 const ButtonRow = styled.div`
   display: flex;
@@ -68,6 +70,16 @@ const SelectorContainer = styled.div`
 `;
 
 const NoDataParagraph = styled.p``;
+
+const FilterGroup = styled.section`
+  margin-bottom: 16px;
+`;
+
+const FilterGroupHeading = styled.h3`
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+`;
 
 /**
  * Inline warning icon that shows a tooltip message on hover.
@@ -305,9 +317,11 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
 
       {Array.isArray(filters) && filters.length > 0 ? (
         <>
-          {filters
-            .filter((filter) => !["fixed", "hidetoggle", "mapViewport"].includes(filter.type))
-            .map((filter) => {
+          {groupFiltersByPane(
+            filters.filter((filter) => !["fixed", "hidetoggle", "mapViewport"].includes(filter.type)),
+            selectMapGrid(mapState)
+          ).map((group) => {
+            const renderedFilters = group.filters.map((filter) => {
               const checkDisabled = (filter) => {
                 if (!filter.disabledWhen) return false;
                 const { paramName, operator, value } = filter.disabledWhen;
@@ -420,7 +434,16 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
                   )}
                 </SelectorContainer>
               );
-            })}
+            });
+            if (!group.title) return <React.Fragment key={group.key}>{renderedFilters}</React.Fragment>;
+            const headingId = `filter-group-${group.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            return (
+              <FilterGroup key={group.key} aria-labelledby={headingId}>
+                <FilterGroupHeading id={headingId}>{group.title}</FilterGroupHeading>
+                {renderedFilters}
+              </FilterGroup>
+            );
+          })}
           <ButtonRow>
             {downloadPath && (
               <DownloadButton 

@@ -61,6 +61,7 @@ describe("MapFeatureSelectAndPan component test", () => {
         filterName: "myFilter",
         layer: "layerA",
         multiSelect: { multiSelect: "multiSelect" },
+        panes: ["right"],
       },
       onChange: fakeOnChange,
     };
@@ -87,6 +88,8 @@ describe("MapFeatureSelectAndPan component test", () => {
       payload: {
         bounds: [[0, 0], [1, 1]],
         centroid: [0.5, 0.5],
+        // The request says which panes to move: the filter's.
+        panes: ["right"],
       },
     });
 

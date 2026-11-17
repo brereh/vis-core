@@ -408,6 +408,12 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
     });
   });
 
+  it("keeps the draw control on the primary pane, whatever the feature-select filters target", () => {
+    const select = { id: "select", type: "mapFeatureSelect", layer: ZONES, panes: [paneIds.at(-1)], actions: [] };
+    const { maps, grid } = renderGrid({ type, filters: [select] });
+    paneIds.forEach((id) => expect(maps[id].addControl).toHaveBeenCalledTimes(id === grid.primaryPaneId ? 1 : 0));
+  });
+
   describe("feature focus", () => {
     const bounds = {
       type: "Polygon",
@@ -616,6 +622,51 @@ describe("a configured grid", () => {
     renderGrid({ gridConfig: dashboard });
     const legends = screen.getAllByTestId("legend").map((legend) => legend.textContent);
     expect(legends).toEqual(["Overview + Base year: base", "2040: future"]);
+  });
+
+  describe("feature focus", () => {
+    const bounds = { type: "Polygon", coordinates: [[[-2, 53], [-1, 53], [-1, 54], [-2, 54], [-2, 53]]] };
+    const focus = (panes) => ({
+      mapBoundsAndCentroid: { bounds, centroid: { type: "Point", coordinates: [-1.5, 53.5] }, featureName: "Leeds", panes },
+    });
+    const labelOn = (map) => map.getSource("feature-label-source")?.data.properties.name;
+
+    it("moves one target pane per sync group and labels the targets and their groups", () => {
+      const { maps } = renderGrid({ gridConfig: dashboard, state: focus(["overview", "future"]) });
+      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
+      expect(maps.future.fitBounds).toHaveBeenCalledTimes(1);
+      expect(maps.base.fitBounds).not.toHaveBeenCalled();
+      expect(maps.base.getCenter()).toEqual({ lng: -1.5, lat: 53.5 });
+      ["overview", "base", "future"].forEach((id) => expect(labelOn(maps[id])).toBe("Leeds"));
+    });
+
+    it("leaves panes outside the targets' groups alone", () => {
+      const { maps } = renderGrid({ gridConfig: dashboard, state: focus(["base"]) });
+      expect(maps.base.fitBounds).toHaveBeenCalledTimes(1);
+      expect(maps.overview.fitBounds).not.toHaveBeenCalled();
+      expect(labelOn(maps.overview)).toBeUndefined();
+      expect(labelOn(maps.future)).toBe("Leeds");
+    });
+
+    it("moves the primary pane when the request names no pane", () => {
+      const { maps } = renderGrid({ gridConfig: dashboard, state: focus(undefined) });
+      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
+      expect(maps.base.fitBounds).not.toHaveBeenCalled();
+    });
+  });
+
+  it("puts the draw control on the pane the feature-select filters target", () => {
+    const select = { id: "select", type: "mapFeatureSelect", layer: ZONES, panes: ["future"], actions: [] };
+    const { maps } = renderGrid({ gridConfig: dashboard, filters: [select] });
+    expect(maps.future.addControl).toHaveBeenCalledTimes(1);
+    expect(maps.overview.addControl).not.toHaveBeenCalled();
+  });
+
+  it("names untitled groups by their panes when there are several legends", () => {
+    renderGrid({
+      gridConfig: { columns: 2, rows: 1, cells: [{ id: "a" }, { id: "b", column: 2, classification: "own" }] },
+    });
+    expect(screen.getAllByTestId("legend").map((legend) => legend.textContent)).toEqual(["a: a", "b: b"]);
   });
 
   it("shows one untitled legend when every pane shares colour classes", () => {

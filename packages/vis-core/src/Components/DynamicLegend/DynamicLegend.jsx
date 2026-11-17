@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useContext } from "react";
+import React, { useEffect, useMemo, useState, useRef, useContext } from "react";
 import { createPortal } from 'react-dom';
 import {
   buildCategoricalLegendKey,
@@ -25,6 +25,7 @@ import {
   getEntryDashStatus,
 } from "./DynamicLegend.utils";
 import LegendLayerGroup from "./LegendLayerGroup";
+import { selectClassificationData, selectMapGrid, selectPaneVisualisation } from "../../reducers/mapSelectors";
 
 /**
  * DynamicLegend is a React component that renders a map legend based on the styles of map layers.
@@ -35,11 +36,14 @@ import LegendLayerGroup from "./LegendLayerGroup";
 * @property {Object} map - The map instance from Mapbox or MapLibre.
 * @property {string} [title] - A heading, when the page shows several legends (one per group of
 *   map panes that share colour classes).
+* @property {string} [paneId] - The pane whose map this is. Its classification group's data
+*   feeds the band editor and histogram; on a configured grid, its own params feed the legend
+*   text. Defaults to the page's primary pane.
 * @property {boolean} [stacked=false] - Lay the legend out inside a stack of legends instead of
 *   placing it over the map.
 * @returns {JSX.Element|null} The rendered legend component or null if there are no legend items.
  */
-export const DynamicLegend = ({ map, title, stacked = false }) => {
+export const DynamicLegend = ({ map, title, paneId, stacked = false }) => {
   const isMobile = useIsMobile();
   const [legendItems, setLegendItems] = useState([]);
   const { state } = useMapContext();
@@ -60,13 +64,23 @@ export const DynamicLegend = ({ map, title, stacked = false }) => {
   const legendRef = useRef(null);
   const currentPage = useContext(PageContext);
 
-  // Build a lookup of already-fetched data by layerId from state.visualisations
-  const visualisationDataByLayer = {};
-  Object.entries(state.visualisations).forEach(([key, vis]) => {
-    if (vis && vis.joinLayer && vis.data) {
-      visualisationDataByLayer[vis.joinLayer] = vis.data;
-    }
-  });
+  const grid = selectMapGrid(state);
+  const legendPaneId = paneId ?? grid.primaryPaneId;
+  // The params a layer's legend text describes: the page's on presets (as before), and the
+  // legend pane's own on a configured grid, where panes in different groups can differ.
+  const legendVisualisation = (key) =>
+    grid.preset === "custom" ? selectPaneVisualisation(state, legendPaneId, key) : state.visualisations[key];
+
+  // Already-fetched data by layer id: the data the legend pane's colour classes are computed from.
+  const visualisationDataByLayer = useMemo(() => {
+    const byLayer = {};
+    Object.entries(state.visualisations).forEach(([key, vis]) => {
+      const data = vis?.joinLayer ? selectClassificationData(state, key, legendPaneId) : undefined;
+      if (data) byLayer[vis.joinLayer] = data;
+    });
+    return byLayer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.visualisations, state.paneData, state.mapGrid, legendPaneId]);
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -128,7 +142,7 @@ export const DynamicLegend = ({ map, title, stacked = false }) => {
           const visualisationKey = Object.keys(state.visualisations).find(key => {
             return state.visualisations[key].joinLayer === layer.id;
           });
-          const visualisation = state.visualisations[visualisationKey];
+          const visualisation = visualisationKey ? legendVisualisation(visualisationKey) : undefined;
           const legendText = visualisation?.legendText || [];
 
           const title = layer.id;
@@ -412,7 +426,8 @@ export const DynamicLegend = ({ map, title, stacked = false }) => {
     return () => {
       map.off("styledata", updateLegend);
     };
-  }, [state.filters, state.categoricalLegendCache, map, state.visualisations, state.currentZoom, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.filters, state.categoricalLegendCache, map, state.visualisations, state.paneOverrides, state.mapGrid, legendPaneId, state.currentZoom, currentPage]);
   
   // This effect forces the container's width to update after legendItems change,
   // working around Firefox's flex-wrap column bug.
