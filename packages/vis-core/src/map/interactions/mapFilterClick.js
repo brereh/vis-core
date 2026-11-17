@@ -16,6 +16,7 @@ import { highlightSelectedFeature } from "./selectionHighlight";
  *   layer, a filter targeting the clicked pane is skipped: the feature on top decides, as on
  *   a single map. Of several filters on the same layer, only the first applies to each pane
  *   (so a "Left …" and a "Right …" filter on one layer each still apply to their own pane).
+ *   A pane the first filter cleared (no feature there) counts as handled for that layer too.
  * - If no target pane has a feature of the filter's layer there, nothing changes (selections
  *   stay, matching the filter value that is still applied).
  * - Otherwise, each target pane with a feature selects it and dispatches its value; each target

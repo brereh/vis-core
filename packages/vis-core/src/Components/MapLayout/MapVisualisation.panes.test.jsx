@@ -118,3 +118,36 @@ describe("classification across side-by-side panes", () => {
     });
   });
 });
+
+describe("a pane with its own classification", () => {
+  it("classifies over its own data only, while the shared panes still combine theirs", async () => {
+    const maps = { left: mapWithLayer("left"), right: mapWithLayer("right") };
+    useFetchVisualisationData.mockImplementation((vis, { map }) => ({
+      isLoading: false,
+      data: map === maps.left ? LEFT_DATA : RIGHT_DATA,
+      error: null,
+      dataWasReturnedButFiltered: false,
+      fetchState: "success",
+      resetFetchState: jest.fn(),
+    }));
+    const base = paneState({ left: LEFT_DATA, right: RIGHT_DATA });
+    const state = {
+      ...base,
+      // The right pane classifies on its own.
+      mapGrid: { ...base.mapGrid, panes: [base.mapGrid.panes[0], { ...base.mapGrid.panes[1], classification: "own" }] },
+      layers: { [LAYER]: { name: LAYER, isStylable: true } },
+      colorSchemesByLayer: {},
+      customColorSchemeSelectedByLayer: {},
+      categoricalLegendCache: {},
+      filters: [],
+    };
+
+    renderOnPanes(state, maps);
+    await waitFor(() => expect(reclassifyData.mock.calls.length).toBeGreaterThanOrEqual(2));
+
+    const classified = reclassifyData.mock.calls.map(([data]) => data);
+    expect(classified).toContainEqual(LEFT_DATA);
+    expect(classified).toContainEqual(RIGHT_DATA);
+    classified.forEach((data) => expect(data).not.toHaveLength(LEFT_DATA.length + RIGHT_DATA.length));
+  });
+});

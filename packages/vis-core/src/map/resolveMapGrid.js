@@ -1,10 +1,20 @@
 /**
- * Works out a map page's panes from its config.
+ * Works out a map page's grid of cells from its config.
  *
- * Every map page is a grid of cells; a `map` cell is a pane with its own MapLibre map.
- * Pages without a grid are presets: `MapLayout` is one pane ("main"), `DualMapLayout` is two
- * side by side ("left", "right"). Custom grids arrive in Phase 4 of
- * docs/Map Panes Consolidation Plan.md; this module already returns the same shape for them.
+ * Every map page is a grid of cells; a `map` cell is a pane with its own MapLibre map. Pages
+ * without `config.grid` are presets: `MapLayout` is one pane ("main"), `DualMapLayout` is two
+ * side by side ("left", "right"). A page with `config.grid` lays its cells out as configured
+ * (see docs/Map Panes Consolidation Plan.md §3.2):
+ *
+ *   grid: {
+ *     columns: 3,          // a count, or relative widths such as [2, 1, 1]
+ *     rows: 2,             // a count, or relative heights
+ *     cells: [{ id, type: "map", column, row, columnSpan, rowSpan, title,
+ *               visualisations, layers, syncGroup, classification }],
+ *   }
+ *
+ * Problems in a grid config don't throw: they're reported in `warnings` (MapContext logs them
+ * in development) and fall back to safe defaults.
  *
  * Pure: config in, plain serialisable data out.
  */
@@ -13,6 +23,14 @@ export const SINGLE_PANE_ID = "main";
 export const LEFT_PANE_ID = "left";
 export const RIGHT_PANE_ID = "right";
 export const DEFAULT_SYNC_GROUP = "default";
+
+/** Cell types the grid can render. Only maps for now; other widgets can be added later. */
+export const CELL_TYPES = ["map"];
+
+/** More map panes than this works, but each one costs a WebGL context and memory. */
+export const MAX_RECOMMENDED_MAP_PANES = 4;
+
+const CLASSIFICATIONS = ["shared", "own"];
 
 /** Visualisation types drawn on a map (as opposed to callout cards and the like). */
 const MAP_VISUALISATION_TYPES = ["joinDataToMap", "geojson"];
@@ -24,26 +42,46 @@ const mapVisualisationNames = (config) =>
 
 const layerNames = (config) => (config?.layers ?? []).map((layer) => layer.name);
 
+const isPositiveInteger = (value) => Number.isInteger(value) && value > 0;
+
 /**
- * A pane with its defaults filled in.
+ * A grid dimension as relative sizes: a count gives that many equal sizes; a list of positive
+ * numbers is used as is.
+ *
+ * @returns {number[]|null} Null if the value is neither.
+ */
+function toSizes(value) {
+  if (isPositiveInteger(value)) return Array.from({ length: value }, () => 1);
+  if (Array.isArray(value) && value.length > 0 && value.every((size) => Number.isFinite(size) && size > 0)) {
+    return value;
+  }
+  return null;
+}
+
+/**
+ * A cell with its defaults filled in. Map cells get the pane fields.
  *
  * @param {Object} cell - Cell config.
  * @param {Object} pageConfig - The page's `config`, for the default content.
  * @returns {Object}
  */
-function toPane(cell, pageConfig) {
-  return {
+function toCell(cell, pageConfig) {
+  const placed = {
     id: cell.id,
-    type: "map",
+    type: cell.type ?? "map",
     column: cell.column ?? 1,
     row: cell.row ?? 1,
     columnSpan: cell.columnSpan ?? 1,
     rowSpan: cell.rowSpan ?? 1,
     title: cell.title,
+  };
+  if (placed.type !== "map") return placed;
+  return {
+    ...placed,
     visualisations: cell.visualisations ?? mapVisualisationNames(pageConfig),
     layers: cell.layers ?? layerNames(pageConfig),
     syncGroup: cell.syncGroup === undefined ? DEFAULT_SYNC_GROUP : cell.syncGroup,
-    classification: cell.classification ?? "shared",
+    classification: CLASSIFICATIONS.includes(cell.classification) ? cell.classification : "shared",
   };
 }
 
@@ -59,25 +97,178 @@ const PRESETS = {
   },
 };
 
+/** Checks a configured grid, returning its cells (with ids) and what's wrong with it. */
+function checkGrid(grid, pageConfig) {
+  const warnings = [];
+  const columnSizes = toSizes(grid.columns);
+  const rowSizes = toSizes(grid.rows);
+  if (!columnSizes) warnings.push(`grid.columns must be a positive whole number or a list of positive numbers; using 1.`);
+  if (!rowSizes) warnings.push(`grid.rows must be a positive whole number or a list of positive numbers; using 1.`);
+  const columns = columnSizes ?? [1];
+  const rows = rowSizes ?? [1];
+
+  const knownVisualisations = new Set(mapVisualisationNames(pageConfig));
+  const knownLayers = new Set(layerNames(pageConfig));
+  const rawCells = Array.isArray(grid.cells) ? grid.cells : [];
+  // Ids the config gives, so generated ids never take one a later cell asks for.
+  const configuredIds = new Set(rawCells.map((cell) => cell?.id).filter((id) => typeof id === "string" && id));
+  const seenIds = new Set();
+  const freshId = (base, index) => {
+    let n = index + 1;
+    while (seenIds.has(`${base}-${n}`) || configuredIds.has(`${base}-${n}`)) n += 1;
+    return `${base}-${n}`;
+  };
+  const occupied = new Map();
+
+  const cells = rawCells.map((rawCell, index) => {
+    const cell = { ...rawCell };
+    const label = cell.id ? `Cell "${cell.id}"` : `Cell ${index + 1}`;
+
+    if (cell.id === undefined || cell.id === null || cell.id === "") {
+      cell.id = freshId("cell", index);
+      warnings.push(`${label} has no id; using "${cell.id}".`);
+    } else if (typeof cell.id !== "string") {
+      cell.id = freshId("cell", index);
+      warnings.push(`${label} has an id that isn't a string; using "${cell.id}".`);
+    } else if (seenIds.has(cell.id)) {
+      cell.id = freshId(cell.id, index);
+      warnings.push(`${label} repeats an id already used; using "${cell.id}".`);
+    }
+    seenIds.add(cell.id);
+
+    const type = cell.type ?? "map";
+    if (!CELL_TYPES.includes(type)) {
+      warnings.push(`${label} has type "${type}", which the grid can't render (known: ${CELL_TYPES.join(", ")}).`);
+    }
+
+    ["column", "row", "columnSpan", "rowSpan"].forEach((field) => {
+      if (cell[field] !== undefined && !isPositiveInteger(cell[field])) {
+        warnings.push(`${label} has ${field} ${JSON.stringify(cell[field])}; it must be a positive whole number. Using 1.`);
+        cell[field] = 1;
+      }
+    });
+    // Placement is pulled inside the grid: a start past the edge moves to the last track, and a
+    // span past the edge is trimmed.
+    const requestedLastColumn = (cell.column ?? 1) + (cell.columnSpan ?? 1) - 1;
+    const requestedLastRow = (cell.row ?? 1) + (cell.rowSpan ?? 1) - 1;
+    if (requestedLastColumn > columns.length || requestedLastRow > rows.length) {
+      warnings.push(
+        `${label} reaches column ${requestedLastColumn}, row ${requestedLastRow}, outside the ${columns.length}×${rows.length} grid; fitting it inside.`
+      );
+      cell.column = Math.min(cell.column ?? 1, columns.length);
+      cell.row = Math.min(cell.row ?? 1, rows.length);
+      cell.columnSpan = Math.min(cell.columnSpan ?? 1, columns.length - cell.column + 1);
+      cell.rowSpan = Math.min(cell.rowSpan ?? 1, rows.length - cell.row + 1);
+    }
+    const column = cell.column ?? 1;
+    const row = cell.row ?? 1;
+    const lastColumn = column + (cell.columnSpan ?? 1) - 1;
+    const lastRow = row + (cell.rowSpan ?? 1) - 1;
+    // A cell overlapping an earlier one isn't shown (the earlier cell keeps its space).
+    const tracks = [];
+    for (let c = column; c <= lastColumn; c += 1) {
+      for (let r = row; r <= lastRow; r += 1) tracks.push(`${c},${r}`);
+    }
+    const clash = tracks.find((key) => occupied.has(key));
+    if (clash) {
+      const [c, r] = clash.split(",");
+      warnings.push(`${label} overlaps cell "${occupied.get(clash)}" at column ${c}, row ${r}; leaving it out.`);
+      return null;
+    }
+    tracks.forEach((key) => occupied.set(key, cell.id));
+
+    if (type === "map") {
+      (cell.visualisations ?? []).filter((name) => !knownVisualisations.has(name)).forEach((name) =>
+        warnings.push(`${label} shows visualisation "${name}", which isn't one of the page's map visualisations.`)
+      );
+      (cell.layers ?? []).filter((name) => !knownLayers.has(name)).forEach((name) =>
+        warnings.push(`${label} shows layer "${name}", which the page doesn't define.`)
+      );
+      if (cell.classification !== undefined && !CLASSIFICATIONS.includes(cell.classification)) {
+        warnings.push(`${label} has classification "${cell.classification}"; use "shared" or "own". Using "shared".`);
+      }
+    } else {
+      ["classification", "syncGroup", "visualisations", "layers"]
+        .filter((field) => cell[field] !== undefined)
+        .forEach((field) => warnings.push(`${label} isn't a map cell, so its ${field} is ignored.`));
+    }
+    return cell;
+  }).filter(Boolean);
+
+  return { columns, rows, cells, warnings };
+}
+
 /**
  * Resolves a page's grid.
  *
  * @param {Object} page - The page config (`{ type, config }`).
- * @returns {{ columns: number, rows: number, panes: Object[], paneIds: string[],
- *   primaryPaneId: string, preset: "single"|"dual" }}
+ * @returns {{ columns: number, rows: number, columnSizes: number[], rowSizes: number[],
+ *   cells: Object[], panes: Object[], paneIds: string[], primaryPaneId: string,
+ *   preset: "single"|"dual"|"custom", warnings: string[] }} `cells` are all the grid's cells;
+ *   `panes` are its map cells, in config order.
  */
 export function resolveMapGrid(page) {
-  const preset = page?.type === "DualMapLayout" ? "dual" : "single";
-  const { columns, rows, cells } = PRESETS[preset];
-  const panes = cells.map((cell) => toPane(cell, page?.config));
+  const config = page?.config;
+  const presetName = page?.type === "DualMapLayout" ? "dual" : "single";
+  let layout = { ...PRESETS[presetName], warnings: [] };
+  let preset = presetName;
+
+  if (config?.grid) {
+    const checked = checkGrid(config.grid, config);
+    const mapCells = checked.cells.filter((cell) => (cell.type ?? "map") === "map");
+    if (mapCells.length === 0) {
+      checked.warnings.push(`The grid has no map cells; showing the page's default layout instead.`);
+      layout = { ...layout, warnings: checked.warnings };
+    } else {
+      layout = checked;
+      preset = "custom";
+      if (presetName === "dual") {
+        layout.warnings.push(
+          `This side-by-side page has a grid, so filters' "sides" and Left/Right names no longer pick panes; give filters "panes" instead.`
+        );
+      }
+      if (mapCells.length > MAX_RECOMMENDED_MAP_PANES) {
+        layout.warnings.push(
+          `The grid has ${mapCells.length} map panes. More than ${MAX_RECOMMENDED_MAP_PANES} works, but each costs a WebGL context and memory; browsers drop contexts beyond about 16.`
+        );
+      }
+    }
+  }
+
+  const columnSizes = Array.isArray(layout.columns) ? layout.columns : toSizes(layout.columns);
+  const rowSizes = Array.isArray(layout.rows) ? layout.rows : toSizes(layout.rows);
+  const cells = layout.cells.map((cell) => toCell(cell, config));
+  const panes = cells.filter((cell) => cell.type === "map");
   return {
-    columns,
-    rows,
+    columns: columnSizes.length,
+    rows: rowSizes.length,
+    columnSizes,
+    rowSizes,
+    cells,
     panes,
     paneIds: panes.map((pane) => pane.id),
     primaryPaneId: panes[0].id,
     preset,
+    warnings: layout.warnings,
   };
+}
+
+/**
+ * Warnings for filters that name panes the grid doesn't have.
+ *
+ * @param {Object[]} filters - Filter configs.
+ * @param {Object} grid - From `resolveMapGrid`.
+ * @returns {string[]}
+ */
+export function filterPaneWarnings(filters, grid) {
+  const known = new Set(grid.paneIds);
+  return (filters ?? []).flatMap((filter) =>
+    Array.isArray(filter.panes)
+      ? filter.panes
+          .filter((id) => !known.has(id))
+          .map((id) => `Filter "${filter.filterName ?? filter.paramName}" targets pane "${id}", which the grid doesn't have.`)
+      : []
+  );
 }
 
 /** The grid of a single-map page that shows everything, for state with no grid set. */

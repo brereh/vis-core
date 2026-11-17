@@ -83,6 +83,12 @@ export const LegendContainer = styled.div`
     gap: 0 10px;
   }
 
+  ${({ $stacked }) => $stacked && `
+    position: static;
+    bottom: auto;
+    right: auto;
+  `}
+
   ${({ $outside }) => $outside && `
     position: static;
     display: block;
@@ -97,4 +103,12 @@ export const LegendContainer = styled.div`
     margin: 8px 0 0;
     padding: 12px 16px;
   `}
+`;
+
+/** Heading of one legend in a stack of legends. */
+export const LegendTitle = styled.div`
+  width: 100%;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
 `;

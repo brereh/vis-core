@@ -1,17 +1,17 @@
 import React, { useEffect, useRef } from "react";
 import styled from "styled-components";
 
-import { DynamicLegend } from "Components/DynamicLegend/DynamicLegend";
 import { useMapContext } from "hooks/useMapContext";
 import { useBaseMapTransition } from "hooks/useBaseMapTransition";
 import { useShallowStableArray } from "hooks/usePaneVisualisation";
 import { actionTypes } from "reducers";
-import { selectMapGrid, selectMaps, selectPaneData, selectPaneMap } from "../../reducers/mapSelectors";
+import { selectMapGrid, selectMaps, selectPaneMap } from "../../reducers/mapSelectors";
 import { getBaseMap } from "../../map/baseMaps";
 import { focusFeature, showFeatureLabel } from "../../map/interactions/featureFocus";
 import { MapGroupProvider, useMapGroup } from "./MapGroupContext";
 import { CalloutCardStack } from "./CalloutCardStack";
 import MapPane from "./MapPane";
+import { PageLegend } from "./PageLegend";
 import MapStyleToggle from "./MapStyleToggle";
 
 /** Tiles kept in memory across all panes; each pane gets a share (at most the default 500). */
@@ -21,8 +21,8 @@ const MAX_TILE_CACHE_PER_PANE = 500;
 const GridContainer = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: repeat(${({ $columns }) => $columns}, minmax(0, 1fr));
-  grid-template-rows: repeat(${({ $rows }) => $rows}, minmax(0, 1fr));
+  grid-template-columns: ${({ $columnSizes }) => trackTemplate($columnSizes)};
+  grid-template-rows: ${({ $rowSizes }) => trackTemplate($rowSizes)};
   width: 100%;
   height: calc(100vh - 75px);
 
@@ -47,22 +47,16 @@ const GridCell = styled.div`
   }
 `;
 
+/** Grid tracks from relative sizes: [2, 1] → "minmax(0, 2fr) minmax(0, 1fr)". */
+const trackTemplate = (sizes) => sizes.map((size) => `minmax(0, ${size}fr)`).join(" ");
+
+/** What each cell type renders. Only maps for now; other widgets can be added here. */
+const CELL_COMPONENTS = { map: MapPane };
+
 const cellPlacement = (pane) => ({
   gridColumn: `${pane.column} / span ${pane.columnSpan}`,
   gridRow: `${pane.row} / span ${pane.rowSpan}`,
 });
-
-/**
- * The map whose layers the legend lists: on a page with several panes, the last pane with data
- * for the first visualisation, or the last pane if none has any. (On a side-by-side page that
- * is the right pane unless only the left has data, as before.)
- */
-function legendPaneId(state, grid) {
-  const firstVisualisation = Object.keys(state.visualisations ?? {})[0];
-  const hasData = (paneId) => (selectPaneData(state, paneId, firstVisualisation)?.length ?? 0) > 0;
-  const withData = grid.paneIds.filter(hasData);
-  return withData.length ? withData[withData.length - 1] : grid.paneIds[grid.paneIds.length - 1];
-}
 
 /**
  * Moves the primary pane to a feature chosen in a select-and-pan filter (its sync group
@@ -117,34 +111,41 @@ function MapGridContent({ extraCopyrightText, sidebarIsOpen, showMapStyleToggle 
   useFeatureFocus(state, dispatch, grid.primaryPaneId);
 
   const tileCacheSize = Math.min(MAX_TILE_CACHE_PER_PANE, Math.round(TOTAL_TILE_CACHE / Math.max(2, paneCount)));
-  const legendMap = selectPaneMap(state, legendPaneId(state, grid));
   const primaryMap = selectPaneMap(state, grid.primaryPaneId);
+  const columnSizes = grid.columnSizes ?? Array.from({ length: grid.columns }, () => 1);
+  const rowSizes = grid.rowSizes ?? Array.from({ length: grid.rows }, () => 1);
 
   return (
-    <GridContainer $columns={grid.columns} $rows={grid.rows} $paneCount={paneCount}>
-      {grid.panes.map((pane) => (
-        <GridCell key={pane.id} style={cellPlacement(pane)}>
-          <MapPane
-            pane={pane}
-            isPrimary={pane.id === grid.primaryPaneId}
-            extraCopyrightText={extraCopyrightText}
-            compactAttribution={paneCount > 1}
-            tileCacheSize={tileCacheSize}
-          />
-        </GridCell>
-      ))}
+    <GridContainer $columnSizes={columnSizes} $rowSizes={rowSizes} $paneCount={paneCount}>
+      {(grid.cells ?? grid.panes).map((cell) => {
+        const CellComponent = CELL_COMPONENTS[cell.type ?? "map"];
+        return (
+          <GridCell key={cell.id} style={cellPlacement(cell)} data-cell-id={cell.id}>
+            {CellComponent && (
+              <CellComponent
+                pane={cell}
+                isPrimary={cell.id === grid.primaryPaneId}
+                extraCopyrightText={extraCopyrightText}
+                compactAttribution={paneCount > 1}
+                tileCacheSize={tileCacheSize}
+              />
+            )}
+          </GridCell>
+        );
+      })}
       {showMapStyleToggle && primaryMap && <MapStyleToggle map={primaryMap} />}
       {state.visualisations && (
         <CalloutCardStack visualisationConfigs={state.visualisations} sidebarIsOpen={sidebarIsOpen} />
       )}
-      {legendMap && <DynamicLegend map={legendMap} />}
+      <PageLegend />
     </GridContainer>
   );
 }
 
 /**
  * The page's maps: one pane per map cell of the page's grid (one for a single-map page, two
- * side by side for a dual page), with the page's callout cards and legend drawn once over them.
+ * side by side for a dual page, or as `config.grid` lays them out), with the page's callout
+ * cards and legend drawn once over them.
  *
  * @param {Object} props
  * @param {string} [props.extraCopyrightText]

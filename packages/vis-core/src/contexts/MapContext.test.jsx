@@ -269,3 +269,50 @@ describe("map grid", () => {
     });
   });
 });
+
+describe("grid config warnings", () => {
+  const originalEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  const renderWithGrid = () =>
+    render(
+      <PageContext.Provider
+        value={{
+          ...mockPageContext,
+          pageName: "Dashboard",
+          config: {
+            ...mockPageContext.config,
+            grid: { columns: 1, rows: 1, cells: [{ id: "a" }, { id: "b" }] },
+          },
+        }}
+      >
+        <AppContext.Provider value={mockAppContexte}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <MapProvider>
+              <p>ImAChildren</p>
+            </MapProvider>
+          </FilterContext.Provider>
+        </AppContext.Provider>
+      </PageContext.Provider>
+    );
+
+  beforeEach(() => {
+    mockUseReducer.mockReturnValue([{}, mockDispatch]);
+  });
+
+  it("are logged in development, naming the page", () => {
+    process.env.NODE_ENV = "development";
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    renderWithGrid();
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/^\[MapGrid\] Dashboard: Cell "b" overlaps cell "a"/));
+  });
+
+  it("aren't logged otherwise", () => {
+    process.env.NODE_ENV = "production";
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    renderWithGrid();
+    expect(error).not.toHaveBeenCalledWith(expect.stringMatching(/\[MapGrid\]/));
+  });
+});

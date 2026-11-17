@@ -1,5 +1,7 @@
 import {
   FALLBACK_GRID,
+  filterPaneWarnings,
+  MAX_RECOMMENDED_MAP_PANES,
   LEFT_PANE_ID,
   paneShows,
   panesShowing,
@@ -83,5 +85,167 @@ describe("panesShowing", () => {
   it("treats the fallback grid's pane as showing everything", () => {
     expect(panesShowing(FALLBACK_GRID, { visualisation: "Anything" })).toEqual([SINGLE_PANE_ID]);
     expect(paneShows(FALLBACK_GRID.panes[0], { layer: "Anything" })).toBe(true);
+  });
+});
+
+describe("resolveMapGrid with a configured grid", () => {
+  const page = (grid, extra = {}) => ({ type: "MapLayout", config: { ...config, grid, ...extra } });
+  const dashboard = {
+    columns: [2, 1],
+    rows: 2,
+    cells: [
+      { id: "overview", column: 1, row: 1, rowSpan: 2, title: "Overview", visualisations: ["Accessibility"], syncGroup: null },
+      { id: "base", column: 2, row: 1, title: "Base", layers: ["Zones"] },
+      { id: "future", column: 2, row: 2, title: "2040", classification: "own" },
+    ],
+  };
+
+  it("lays the cells out as configured", () => {
+    const grid = resolveMapGrid(page(dashboard));
+    expect(grid).toMatchObject({
+      preset: "custom",
+      columns: 2,
+      rows: 2,
+      columnSizes: [2, 1],
+      rowSizes: [1, 1],
+      paneIds: ["overview", "base", "future"],
+      primaryPaneId: "overview",
+      warnings: [],
+    });
+    expect(grid.panes[0]).toMatchObject({ column: 1, row: 1, columnSpan: 1, rowSpan: 2, syncGroup: null, title: "Overview" });
+  });
+
+  it("fills in each pane's content and options", () => {
+    const [overview, base, future] = resolveMapGrid(page(dashboard)).panes;
+    expect(overview.visualisations).toEqual(["Accessibility"]);
+    expect(overview.layers).toEqual(["Zones", "Network"]);
+    expect(base.visualisations).toEqual(["Accessibility", "Flows"]);
+    expect(base.layers).toEqual(["Zones"]);
+    expect(base.syncGroup).toBe("default");
+    expect(future.classification).toBe("own");
+  });
+
+  it("uses the grid for a DualMapLayout page that has one", () => {
+    expect(resolveMapGrid({ type: "DualMapLayout", config: { ...config, grid: dashboard } }).preset).toBe("custom");
+  });
+
+  it("keeps other cell types in the grid, but only map cells become panes", () => {
+    const grid = resolveMapGrid(page({ columns: 2, rows: 1, cells: [{ id: "map" }, { id: "notes", type: "text", column: 2 }] }));
+    expect(grid.cells.map((cell) => [cell.id, cell.type])).toEqual([["map", "map"], ["notes", "text"]]);
+    expect(grid.paneIds).toEqual(["map"]);
+    expect(grid.warnings).toEqual([expect.stringContaining('type "text"')]);
+  });
+
+  it.each([
+    ["no map cells", { columns: 1, rows: 1, cells: [{ id: "notes", type: "text" }] }, /no map cells/],
+    ["no cells at all", { columns: 1, rows: 1 }, /no map cells/],
+  ])("falls back to the page's default layout with %s", (_, grid, warning) => {
+    const resolved = resolveMapGrid(page(grid));
+    expect(resolved.preset).toBe("single");
+    expect(resolved.paneIds).toEqual(["main"]);
+    expect(resolved.warnings).toEqual(expect.arrayContaining([expect.stringMatching(warning)]));
+  });
+
+  it.each([
+    ["bad columns", { columns: 0, rows: 1, cells: [{ id: "a" }] }, /grid.columns/],
+    ["bad rows", { columns: 1, rows: [1, -2], cells: [{ id: "a" }] }, /grid.rows/],
+    ["a missing id", { columns: 1, rows: 1, cells: [{}] }, /no id; using "cell-1"/],
+    ["a repeated id", { columns: 2, rows: 1, cells: [{ id: "a" }, { id: "a", column: 2 }] }, /repeats an id/],
+    ["a bad placement value", { columns: 2, rows: 1, cells: [{ id: "a", column: 0 }] }, /column 0/],
+    ["a cell outside the grid", { columns: 1, rows: 1, cells: [{ id: "a", columnSpan: 2 }] }, /outside the 1×1 grid/],
+    ["overlapping cells", { columns: 2, rows: 1, cells: [{ id: "a", columnSpan: 2 }, { id: "b", column: 2 }] }, /"b" overlaps cell "a"/],
+    ["an unknown visualisation", { columns: 1, rows: 1, cells: [{ id: "a", visualisations: ["Nope"] }] }, /visualisation "Nope"/],
+    ["an unknown layer", { columns: 1, rows: 1, cells: [{ id: "a", layers: ["Nope"] }] }, /layer "Nope"/],
+    ["a bad classification", { columns: 1, rows: 1, cells: [{ id: "a", classification: "mine" }] }, /classification "mine"/],
+  ])("warns about %s", (_, grid, warning) => {
+    expect(resolveMapGrid(page(grid)).warnings).toEqual(expect.arrayContaining([expect.stringMatching(warning)]));
+  });
+
+  it("gives unnamed and repeated cells usable ids", () => {
+    const grid = resolveMapGrid(page({ columns: 2, rows: 1, cells: [{}, { id: "cell-1", column: 2 }] }));
+    expect(new Set(grid.paneIds).size).toBe(2);
+  });
+
+  it.each([
+    ["a generated id a later cell asks for", { columns: 2, rows: 1, cells: [{}, { id: "cell-1", column: 2 }] }],
+    ["a generated id an earlier cell took", { columns: 2, rows: 1, cells: [{ id: "cell-2" }, { column: 2 }] }],
+    [
+      "a renamed repeat matching a configured id",
+      { columns: 3, rows: 1, cells: [{ id: "a-3" }, { id: "a", column: 2 }, { id: "a", column: 3 }] },
+    ],
+    ["an id that isn't a string", { columns: 2, rows: 1, cells: [{ id: 5 }, { id: "cell-1", column: 2 }] }],
+  ])("never gives two cells the same id with %s", (_, grid) => {
+    const resolved = resolveMapGrid(page(grid));
+    expect(new Set(resolved.paneIds).size).toBe(grid.cells.length);
+  });
+
+  it("says when an id isn't a string", () => {
+    expect(resolveMapGrid(page({ columns: 1, rows: 1, cells: [{ id: 5 }] })).warnings).toEqual([
+      expect.stringContaining("isn't a string"),
+    ]);
+  });
+
+  it("fits a cell reaching outside the grid inside it", () => {
+    const grid = resolveMapGrid(page({ columns: 2, rows: 2, cells: [{ id: "a", column: 3, row: 2, rowSpan: 4 }] }));
+    expect(grid.panes[0]).toMatchObject({ column: 2, row: 2, columnSpan: 1, rowSpan: 1 });
+  });
+
+  it("leaves out a cell overlapping an earlier one", () => {
+    const grid = resolveMapGrid(page({ columns: 2, rows: 1, cells: [{ id: "a", columnSpan: 2 }, { id: "b", column: 2 }] }));
+    expect(grid.paneIds).toEqual(["a"]);
+    expect(grid.cells.map((cell) => cell.id)).toEqual(["a"]);
+  });
+
+  it("rejects sizes that aren't finite", () => {
+    const grid = resolveMapGrid(page({ columns: [1, Infinity], rows: 1, cells: [{ id: "a" }] }));
+    expect(grid.columnSizes).toEqual([1]);
+    expect(grid.warnings).toEqual([expect.stringMatching(/grid.columns/)]);
+  });
+
+  it("warns about map fields on a cell that isn't a map", () => {
+    const grid = resolveMapGrid(
+      page({ columns: 2, rows: 1, cells: [{ id: "a" }, { id: "n", type: "text", column: 2, syncGroup: null }] })
+    );
+    expect(grid.warnings).toEqual(expect.arrayContaining([expect.stringContaining("its syncGroup is ignored")]));
+  });
+
+  it("flags a map cell listing a visualisation that isn't drawn on maps", () => {
+    const withCard = { ...config, visualisations: [...config.visualisations, { name: "Card", type: "calloutCard" }] };
+    const grid = resolveMapGrid({ type: "MapLayout", config: { ...withCard, grid: { columns: 1, rows: 1, cells: [{ id: "a", visualisations: ["Card"] }] } } });
+    expect(grid.warnings).toEqual([expect.stringContaining('visualisation "Card"')]);
+  });
+
+  it("warns that a side-by-side page with a grid no longer uses sides or Left/Right names", () => {
+    const grid = resolveMapGrid({ type: "DualMapLayout", config: { ...config, grid: { columns: 1, rows: 1, cells: [{ id: "a" }] } } });
+    expect(grid.warnings).toEqual([expect.stringContaining('"panes"')]);
+  });
+
+  it("falls back to a shared classification for an unknown value", () => {
+    const grid = resolveMapGrid(page({ columns: 1, rows: 1, cells: [{ id: "a", classification: "mine" }] }));
+    expect(grid.panes[0].classification).toBe("shared");
+  });
+
+  it("warns about more map panes than recommended", () => {
+    const count = MAX_RECOMMENDED_MAP_PANES + 1;
+    const cells = Array.from({ length: count }, (_, i) => ({ id: `p${i}`, column: i + 1 }));
+    expect(resolveMapGrid(page({ columns: count, rows: 1, cells })).warnings).toEqual([
+      expect.stringMatching(new RegExp(`${count} map panes`)),
+    ]);
+  });
+});
+
+describe("filterPaneWarnings", () => {
+  it("names filters that target panes the grid doesn't have", () => {
+    const grid = resolveMapGrid({ type: "DualMapLayout", config });
+    expect(
+      filterPaneWarnings(
+        [
+          { filterName: "Year", panes: ["left", "middle"] },
+          { filterName: "All", panes: "all" },
+          { paramName: "metric" },
+        ],
+        grid
+      )
+    ).toEqual([expect.stringContaining('"Year" targets pane "middle"')]);
   });
 });

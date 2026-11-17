@@ -37,7 +37,12 @@ jest.mock("Components/ScrollableContainer", () => ({
   ScrollableContainer: ({ children }) => <div data-testid="callout-card-stack">{children}</div>,
 }));
 jest.mock("Components/DynamicLegend/DynamicLegend", () => ({
-  DynamicLegend: ({ map }) => <div data-testid="legend">{map?.name}</div>,
+  DynamicLegend: ({ map, title }) => (
+    <div data-testid="legend">
+      {title ? `${title}: ` : ""}
+      {map?.name}
+    </div>
+  ),
 }));
 jest.mock("./MapStyleToggle", () => ({
   __esModule: true,
@@ -90,12 +95,14 @@ const renderGrid = ({
   mapFor = (paneId) => paneMap(paneId),
   state: extraState = {},
   props = {},
+  gridConfig,
 } = {}) => {
   const grid = resolveMapGrid({
     type,
     config: {
       layers: Object.keys(layers).map((name) => ({ name })),
       visualisations: Object.entries(visualisations).map(([name, vis]) => ({ name, ...vis })),
+      ...(gridConfig ? { grid: gridConfig } : {}),
     },
   });
   const maps = Object.fromEntries(grid.paneIds.map((paneId) => [paneId, mapFor(paneId)]));
@@ -549,5 +556,85 @@ describe("taps on a side-by-side page, on a touch device without hover", () => {
       jest.useRealTimers();
     }
     expect(FakePopup.open()).toEqual([]);
+  });
+});
+
+describe("a configured grid", () => {
+  const dashboard = {
+    columns: [2, 1],
+    rows: 2,
+    cells: [
+      { id: "overview", column: 1, row: 1, rowSpan: 2, title: "Overview", syncGroup: null },
+      { id: "base", column: 2, row: 1, title: "Base year" },
+      { id: "future", column: 2, row: 2, title: "2040", classification: "own" },
+    ],
+  };
+  const cellOf = (container, id) => container.querySelector(`[data-cell-id="${id}"]`);
+
+  it("lays the cells out with their sizes and spans", () => {
+    const { container } = renderGrid({ gridConfig: dashboard });
+    const gridElement = cellOf(container, "overview").parentElement;
+    expect(getComputedStyle(gridElement).gridTemplateColumns).toBe("minmax(0, 2fr) minmax(0, 1fr)");
+    expect(getComputedStyle(gridElement).gridTemplateRows).toBe("minmax(0, 1fr) minmax(0, 1fr)");
+    expect(cellOf(container, "overview").style.gridRow).toBe("1 / span 2");
+    expect(cellOf(container, "future").style.gridColumn).toBe("2 / span 1");
+  });
+
+  it("builds a map per map cell, with compact attribution and a share of the tile cache", () => {
+    renderGrid({ gridConfig: dashboard });
+    const containers = new Set(useMap.mock.calls.map(([ref]) => ref));
+    expect(containers.size).toBe(3);
+    expect(useMap.mock.calls[0][5]).toEqual({ compactAttribution: true, tileCacheSize: 333 });
+  });
+
+  it("names each titled pane as a region", () => {
+    renderGrid({ gridConfig: dashboard });
+    expect(screen.getByRole("region", { name: "2040" })).toBeInTheDocument();
+  });
+
+  it("leaves a cell of a type it can't render empty", () => {
+    const { container } = renderGrid({
+      gridConfig: { columns: 2, rows: 1, cells: [{ id: "map" }, { id: "notes", type: "text", column: 2 }] },
+    });
+    expect(cellOf(container, "notes")).toBeEmptyDOMElement();
+    expect(new Set(useMap.mock.calls.map(([ref]) => ref)).size).toBe(1);
+  });
+
+  it("keeps a pane without a sync group out of the others' camera and hover", () => {
+    const { maps } = renderGrid({ gridConfig: dashboard, mapFor: (id) => paneMap(id, [zone(7, 1)]) });
+    maps.base.jumpTo({ center: [3, 4] });
+    expect(maps.future.getCenter()).toEqual({ lng: 3, lat: 4 });
+    expect(maps.overview.getCenter()).not.toEqual({ lng: 3, lat: 4 });
+
+    maps.base.fire("mousemove", { point: POINT, lngLat: LNG_LAT });
+    expect(popupOn(maps.base)).toBeDefined();
+    expect(popupOn(maps.future)).toBeDefined();
+    expect(popupOn(maps.overview)).toBeUndefined();
+  });
+
+  it("shows a legend for each group of panes sharing colour classes, headed with their titles", () => {
+    renderGrid({ gridConfig: dashboard });
+    const legends = screen.getAllByTestId("legend").map((legend) => legend.textContent);
+    expect(legends).toEqual(["Overview + Base year: base", "2040: future"]);
+  });
+
+  it("shows one untitled legend when every pane shares colour classes", () => {
+    renderGrid({
+      gridConfig: { columns: 2, rows: 1, cells: [{ id: "a", title: "A" }, { id: "b", column: 2, title: "B" }] },
+    });
+    expect(screen.getAllByTestId("legend").map((legend) => legend.textContent)).toEqual(["b"]);
+  });
+});
+
+describe("a pane whose map loses its WebGL context", () => {
+  it("says the map can't be drawn until the page is reloaded, and clears when restored", () => {
+    const { maps } = renderGrid();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    act(() => maps.main.fire("webglcontextlost"));
+    expect(screen.getByRole("alert")).toHaveTextContent(/Reload the page/);
+
+    act(() => maps.main.fire("webglcontextrestored"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
