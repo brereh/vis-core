@@ -76,9 +76,9 @@ function useFeatureFocus(state, dispatch, grid) {
     const focus = state.mapBoundsAndCentroid;
     if (!focus) return;
     const named = (focus.panes ?? []).filter((paneId) => grid.paneIds.includes(paneId));
-    const targets = (named.length ? named : [grid.primaryPaneId]).filter((paneId) => selectPaneMap(state, paneId));
-    // Wait until a target pane's map is ready.
-    if (targets.length === 0) return;
+    const targets = named.length ? named : [grid.primaryPaneId];
+    // Wait until every target pane's map is ready, so none misses the move.
+    if (!targets.every((paneId) => selectPaneMap(state, paneId))) return;
 
     const moved = new Set();
     const labelled = new Set();

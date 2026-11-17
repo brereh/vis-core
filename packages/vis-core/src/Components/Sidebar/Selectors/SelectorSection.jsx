@@ -10,7 +10,7 @@ import { Slider } from "./Slider";
 import { Toggle } from "./Toggle";
 import { AppContext } from "contexts/AppContext";
 import { useToast } from "contexts/ToastContext";
-import React, { useState, useContext, useEffect, useCallback, useRef } from "react";
+import React, { useState, useContext, useEffect, useCallback, useRef, useId } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { MapFeatureSelect, MapFeatureSelectWithControls } from "./MapFeatureSelect";
 import { CheckboxSelector } from './CheckboxSelector';
@@ -122,6 +122,8 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
   const { state: mapState } = useMapContext();
   const { state: filterState, dispatch: filterDispatch } = useFilterContext();
   const { addToast, removeToast } = useToast();
+  // Unique per sidebar, so group heading ids never clash.
+  const filterGroupIdPrefix = `filter-group-${useId().replace(/:/g, "")}`;
   const [isDownloading, setIsDownloading] = useState(false);
   const [isShapefileDownloading, setIsShapefileDownloading] = useState(false);
   const [requestError, setRequestError] = useState(null);
@@ -320,7 +322,7 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
           {groupFiltersByPane(
             filters.filter((filter) => !["fixed", "hidetoggle", "mapViewport"].includes(filter.type)),
             selectMapGrid(mapState)
-          ).map((group) => {
+          ).map((group, groupIndex) => {
             const renderedFilters = group.filters.map((filter) => {
               const checkDisabled = (filter) => {
                 if (!filter.disabledWhen) return false;
@@ -436,7 +438,7 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
               );
             });
             if (!group.title) return <React.Fragment key={group.key}>{renderedFilters}</React.Fragment>;
-            const headingId = `filter-group-${group.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            const headingId = `${filterGroupIdPrefix}-${groupIndex}`;
             return (
               <FilterGroup key={group.key} aria-labelledby={headingId}>
                 <FilterGroupHeading id={headingId}>{group.title}</FilterGroupHeading>

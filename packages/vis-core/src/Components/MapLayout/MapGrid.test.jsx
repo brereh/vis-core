@@ -648,6 +648,22 @@ describe("a configured grid", () => {
       expect(labelOn(maps.future)).toBe("Leeds");
     });
 
+    it("waits until every target pane's map is ready", () => {
+      const { maps, dispatch, rerenderWith } = renderGrid({ gridConfig: dashboard, state: focus(["overview", "future"]) });
+      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
+      dispatch.mockClear();
+      maps.overview.fitBounds.mockClear();
+
+      const { future, ...readyMaps } = maps;
+      rerenderWith({ mapsByPane: readyMaps, mapBoundsAndCentroid: { ...focus(["overview", "future"]).mapBoundsAndCentroid } });
+      expect(maps.overview.fitBounds).not.toHaveBeenCalled();
+      expect(dispatched(dispatch, "CLEAR_BOUNDS_AND_CENTROID")).toHaveLength(0);
+
+      rerenderWith({ mapsByPane: maps });
+      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
+      expect(future.fitBounds).toHaveBeenCalledTimes(2);
+    });
+
     it("moves the primary pane when the request names no pane", () => {
       const { maps } = renderGrid({ gridConfig: dashboard, state: focus(undefined) });
       expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);

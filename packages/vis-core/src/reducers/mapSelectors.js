@@ -69,9 +69,11 @@ export function selectPaneView(state, paneId, visualisationName) {
   if (!visualisation) return visualisation;
   const shared = selectPanesShowing(state, { visualisation: visualisationName }).length > 1;
   const stored = selectPaneData(state, paneId, visualisationName);
-  const data = stored === undefined && shared ? [] : stored;
-  if (data === undefined || data === visualisation.data) return visualisation;
-  return { ...visualisation, data };
+  // A pane that hasn't fetched yet has no data of its own where several panes show the
+  // visualisation; otherwise data stored without a pane (on the page copy) still applies.
+  if (stored === undefined) return shared ? { ...visualisation, data: [] } : visualisation;
+  if (stored === visualisation.data) return visualisation;
+  return { ...visualisation, data: stored };
 }
 
 /**

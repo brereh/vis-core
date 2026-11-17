@@ -8,6 +8,7 @@ import {
   targetPanes,
 } from "./paneState";
 import { FALLBACK_GRID, resolveMapGrid } from "../map/resolveMapGrid";
+import { selectClassificationData } from "./mapSelectors";
 
 const VIS = "Accessibility";
 const CARD = "Summary";
@@ -129,18 +130,20 @@ describe("applyVisualisationParam", () => {
 });
 
 describe("applyPaneData", () => {
-  it("stores each pane's data and keeps all of it on the page copy", () => {
+  it("stores each pane's data, leaving the page copy alone", () => {
     let next = state();
+    const pageCopy = next.visualisations[VIS];
     next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: [{ id: 1 }], paneId: "left" }) };
     next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: [{ id: 2 }], paneId: "right" }) };
     expect(next.paneData).toEqual({ left: { [VIS]: [{ id: 1 }] }, right: { [VIS]: [{ id: 2 }] } });
-    expect(next.visualisations[VIS].data).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(next.visualisations[VIS]).toBe(pageCopy);
   });
 
-  it("keeps the very data on the page copy when one pane shows the visualisation", () => {
-    const data = [{ id: 3 }];
-    const next = applyPaneData(state(), { visualisationName: "Flows", data, paneId: "right" });
-    expect(next.visualisations.Flows.data).toBe(data);
+  it("gives readers all the panes' data together through the selectors", () => {
+    let next = state();
+    next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: [{ id: 1 }], paneId: "left" }) };
+    next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: [{ id: 2 }], paneId: "right" }) };
+    expect(selectClassificationData(next, VIS, "right")).toEqual([{ id: 1 }, { id: 2 }]);
   });
 
   it("puts data without a pane on the page copy only", () => {
@@ -150,11 +153,11 @@ describe("applyPaneData", () => {
     expect(next.paneData).toEqual({});
   });
 
-  it("ignores non-array data when combining", () => {
+  it("leaves non-array data out when the selectors combine panes", () => {
     let next = state();
     next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: { odd: true }, paneId: "left" }) };
     next = { ...next, ...applyPaneData(next, { visualisationName: VIS, data: [{ id: 2 }], paneId: "right" }) };
-    expect(next.visualisations[VIS].data).toEqual([{ id: 2 }]);
+    expect(selectClassificationData(next, VIS, "left")).toEqual([{ id: 2 }]);
   });
 });
 

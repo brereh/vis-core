@@ -6,6 +6,15 @@ Every map page is a grid of cells. A `map` cell is a **pane**: a map of its own,
 - A `DualMapLayout` page without `grid` is two panes side by side, called `left` and `right`.
 - Either page type can set `config.grid` to lay out its panes as a dashboard.
 
+## Presets
+
+| Page | Panes | Notes |
+|---|---|---|
+| `MapLayout` | `main` | One map, as before. |
+| `DualMapLayout` | `left`, `right` | Two maps side by side, in one sync group, sharing colour classes and one legend. The legacy `sides` and Left/Right name rules still pick panes. |
+
+Presets need no config changes: pages written for the single and side-by-side maps keep working.
+
 ## Configuring a grid
 
 ```js
@@ -82,3 +91,33 @@ An action can still name its own target: `sides` on an `UPDATE_DUAL_*` action in
 - The sidebar's layer controls list each layer once, across all panes, and change it on every pane that shows it. A layer's controls describe the visualisation joined to it (`joinLayer`), as drawn by the first pane that shows the layer.
 - A page whose panes all share colour classes shows one legend. A pane with `classification: "own"` gets a legend of its own, so a page with such a pane shows a stack of legends, each headed with its panes' titles.
 - Callout cards are shown once per page, over the grid.
+
+## Parameterised layers with a path per pane
+
+A layer whose tile path has parameters can keep a separate path for each pane: set `separatePanePaths: true` (the older `separateSidePaths` still works). A filter that targets only some of the panes showing the layer then changes only those panes' tiles. Without the flag, the layer has one path, and every filter on its parameters changes it on every pane.
+
+## Migrating a side-by-side page
+
+Nothing has to change: side-by-side configs keep working. To make targeting explicit, or to move a page onto a grid:
+
+| Before | After |
+|---|---|
+| "Left"/"Right" in a filter's name | `panes: ["left"]` / `panes: ["right"]` |
+| A "Side" visualisation so a filter targets both maps | `panes: "all"` (or leave it out: a filter targets the panes showing its visualisations) |
+| `sides: "left"` / `"right"` / `"both"` on a filter | `panes: ["left"]` / `["right"]` / `"all"` |
+| `separateSidePaths: true` on a layer | `separatePanePaths: true` |
+| `UPDATE_DUAL_PATH_PARAMS` / `UPDATE_DUAL_QUERY_PARAMS` | `UPDATE_PATH_PARAMS` / `UPDATE_QUERY_PARAMS` (the `UPDATE_DUAL_*` names remain as aliases) |
+
+To lay a side-by-side page out differently, add `grid` with cells called `left` and `right`, and give every side-specific filter `panes`. On a page with a grid, `sides` and the name rules don't apply, and a warning names any filter that relies on them.
+
+### Behaviour that changed on side-by-side pages
+
+Side-by-side pages now share the single map's code, so they gain its features. A few behaviours changed:
+
+- **Filters that aren't side-specific.** One sent through `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now changes both maps. Before, only the left map changed.
+- **Popups and attribution.** Popup options match the single map, and attribution is compact on both maps.
+- **Callout cards.** There is one stack of callout cards instead of two.
+- **Map-click filters.** One with "Left"/"Right" in its name changes only that pane.
+- **Phones.** On touch-only phones, one finger pans each map, and pinch zooms without rotating.
+
+See §4 of `Map Panes Consolidation Plan.md` for the full list, including the changes on single-map pages.
