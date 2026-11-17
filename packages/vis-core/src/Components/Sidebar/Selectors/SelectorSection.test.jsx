@@ -203,6 +203,39 @@ describe("SelectorSection component test", () => {
     expect(screen.queryByRole("heading", { name: "Base year" })).not.toBeInTheDocument();
   });
 
+  it("gives each sidebar's group headings their own ids", () => {
+    const mapGrid = {
+      preset: "custom",
+      paneIds: ["base", "future"],
+      panes: [
+        { id: "base", type: "map", title: "Base year" },
+        { id: "future", type: "map", title: "2040" },
+      ],
+    };
+    const filters = [{ type: "dropdown", id: "y", filterName: "Year", panes: ["future"], paneScope: "subset", values: [] }];
+    const sidebar = (
+      <SelectorSection {...props} filters={filters} />
+    );
+    render(
+      <AppContext.Provider value={mockAppContexte}>
+        <MapContext.Provider value={{ state: { ...mockState, mapGrid }, dispatch }}>
+          <FilterContext.Provider value={mockFilterContext}>
+            {sidebar}
+            {sidebar}
+          </FilterContext.Provider>
+        </MapContext.Provider>
+      </AppContext.Provider>
+    );
+    const headings = screen.getAllByRole("heading", { name: "2040" });
+    expect(headings).toHaveLength(2);
+    const ids = headings.map((heading) => heading.id);
+    expect(new Set(ids).size).toBe(2);
+    ids.forEach((id) => expect(id).toMatch(/^[A-Za-z0-9_-]+$/));
+    screen.getAllByRole("region", { name: "2040" }).forEach((region, i) =>
+      expect(region.getAttribute("aria-labelledby")).toBe(ids[i])
+    );
+  });
+
   it("shows no group headings on a page without pane titles", () => {
     const filters = [{ type: "dropdown", id: "a", filterName: "A", panes: ["left"], paneScope: "subset", values: [] }];
     const mapGrid = { preset: "dual", paneIds: ["left", "right"], panes: [{ id: "left", type: "map" }, { id: "right", type: "map" }] };

@@ -1,6 +1,6 @@
 # Map Panes Consolidation Plan
 
-Status: **in progress** · Base: upstream `Transport-for-the-North/vis-core@dev` (6e1aca5, after #366) plus the unmerged `fix/map-hover-styles` branch (85c670d), which the work is rebased onto
+Status: **implemented on `feat/map-panes`; the pre-merge check (§4) is still to do** · Base: upstream `Transport-for-the-North/vis-core@dev` (6e1aca5, after #366) plus the unmerged `fix/map-hover-styles` branch (85c670d), which the work is rebased onto
 
 This plan replaces the separate single-map (`Map.jsx`) and dual-map (`DualMaps.jsx`) code with one
 **map pane** that is rendered in the cells of a generic, dashboard-style grid. Single and dual map
@@ -200,7 +200,7 @@ For a 1×1 page every filter targets all panes, so the single-map path is unchan
 |---|---|
 | `UPDATE_PATH_PARAMS`, `UPDATE_QUERY_PARAMS` | Accept `payload.panes`. Implemented with `applyVisualisationParam`. |
 | `UPDATE_DUAL_PATH_PARAMS`, `UPDATE_DUAL_QUERY_PARAMS` | **Kept as aliases** (page configs name them). They take the filter's resolved `panes`. A legacy `sides` on the action in the page config still wins: `"left"`, `"right"`, and `"both"` or unset meaning every pane. (Before, unset meant the left pane only. `MapLayout` sent no `sides` at runtime for filters on visualisations without "Side" in their name, so such filters only ever changed the left pane; see the Phase 2 result.) |
-| `UPDATE_ALL_DATA` | `{ visualisationName, data, paneId }` writes to `paneData`. `state.visualisations[vis].data` is kept as the concatenation over the panes showing `vis`. That equals today's value on single pages and today's `combinedData` on dual pages, and it is a legacy read for `DynamicLegend` and callout cards until Phase 5 moves them onto selectors. |
+| `UPDATE_ALL_DATA` | `{ visualisationName, data, paneId }` writes to `paneData`. `state.visualisations[vis].data` is kept as the concatenation over the panes showing `vis`. That equals today's value on single pages and today's `combinedData` on dual pages, and it is a legacy read for `DynamicLegend` and callout cards until Phase 5 moves them onto selectors. *(Phase 6 removed this copy: readers combine `paneData` through the selectors, and only data stored without a pane goes on the page copy.)* |
 | `UPDATE_PARAMETERISED_LAYER` | `separateSidePaths` becomes `separatePanePaths` (old name accepted), and `sidePaths`/`sideMissingParams` become `panePaths`/`paneMissingParams`. The write rule is the same as for params. `missingParams` is the union across the panes showing the layer, so the layer is added once none of them is missing anything. The flag stays opt-in so existing configs behave as they do today. |
 | `SET_PANE_MAP` / `REMOVE_PANE_MAP` | `{ paneId, map }`. Also keeps `state.map` pointing at the primary pane's map. |
 | `RESET_CONTEXT` | Also clears `map`, `mapsByPane`, `paneOverrides` and `paneData`. This fixes §2.2(6). `mapGrid` is left in place, because the page effect sets it again straight away. |
@@ -359,7 +359,7 @@ Also find single-map configs that use `UPDATE_DUAL_*` or `separateSidePaths`.
 | `Layer.jsx`, `SpiderLayer.jsx`, `MapVisualisation.jsx`, `VisualisationManager.jsx`, `DynamicLegend.jsx` | Take a `map` and `paneId` explicitly, or are split (above). |
 | `MapLayerSection.jsx`, `LayerControlEntry.jsx`, `useLayerZoomMessage.jsx`, `MapFeatureSelect*.jsx`, `useFeatureSelect.js` | Read panes and selectors. The name rules are deleted. |
 | `PageSwitch.jsx` | Unchanged (`DualMapLayout` already routes to `MapLayout`). |
-| `docs/Map Grid.md` | New user-facing config docs (Phase 6). |
+| `docs/Map Grid.md` | New user-facing config docs (Phases 5 and 6). |
 
 Expected net size: `Map.jsx` and `DualMaps.jsx` together drop from about 2,600 lines to roughly 1,200 across `MapPane` and the interaction modules. The reducer loses about 120 lines of `sides` switching.
 
@@ -628,6 +628,26 @@ Map-click filters also change on dual pages:
 - Add `docs/Map Grid.md`: the config reference, the presets, and a migration note from `Left`/`Right` names and `separateSidePaths` to `panes` and `separatePanePaths`.
 - Write the CHANGELOG entry (a minor, with no BREAKING footer, because the config and BaseApp contract is unchanged).
 - Delete the legacy `data` mirror if Phase 5 removed the last reader.
+
+**Phase 6 result.** Full suite: 124 suites and 1124 tests, all passing.
+
+- **Docs.** `docs/Map Grid.md` now also covers the presets, layers with a path per pane (`separatePanePaths`), and migrating a side-by-side page. The migration notes map:
+  - "Left"/"Right" names, "Side" visualisations and `sides` to `panes`
+  - `separateSidePaths` to `separatePanePaths`
+  - `UPDATE_DUAL_*` to `UPDATE_*`
+
+  The notes also summarise the behaviour that changed on side-by-side pages.
+- **CHANGELOG.** No hand-written entry. `release.config.mjs` has `@semantic-release/changelog` write `CHANGELOG.md` from the commit messages on `main`, so a hand-written entry would appear twice. The work's commits are `feat:` and `fix:` with no `BREAKING CHANGE` footer, so they produce a minor release. (`dev` releases are beta prereleases with GitHub release notes and no CHANGELOG update.)
+  - Whichever way `feat/map-panes` reaches `dev`, the commit that lands must keep a `feat:` type: for a squash merge, that means the PR title.
+- **Data mirror deleted:**
+  - `applyPaneData` stores a pane's data in `paneData` only. Data without a pane still goes on the page copy, which is the only use left for `state.visualisations[].data`.
+  - `selectPaneView` and `selectClassificationData` read pane data, falling back to the page copy's data only where no pane has any.
+  - The `applyPaneData` tests now check the selectors instead of the mirror.
+- **Layer-click popups** close when any pane's data changes. The popup effect depends on `state.paneData` as well as `state.visualisations`, because a fetch no longer rewrites the page copy (review fix).
+- **Carried from the Phase 5 review:**
+  - Feature focus moves ready target panes at once and the others as their maps become ready, and clears the request once every target is done. So no target misses the move, and a pane that never loads doesn't hold up the rest.
+  - Sidebar group heading ids are unique for each sidebar (`useId`).
+  - (`MapLayerSection` still takes the base-source fallback from the first map. Every pane starts from the same base style, so their initial base sources match.)
 
 ---
 

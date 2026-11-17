@@ -15,6 +15,7 @@ import {
 } from "./mapSelectors";
 import { usePaneVisualisation, useShallowStableArray } from "../hooks/usePaneVisualisation";
 import { resolveMapGrid } from "../map/resolveMapGrid";
+import { mapReducer } from "./mapReducer";
 
 const VIS = "Accessibility";
 const grid = resolveMapGrid({ type: "DualMapLayout", config: { visualisations: [{ name: VIS, type: "joinDataToMap" }] } });
@@ -160,11 +161,16 @@ describe("selectPaneView", () => {
     expect(selectPaneView(state, "right", VIS).data).toEqual([{ id: 9 }]);
   });
 
-  it("returns the page's copy when the pane's data is the page's data", () => {
+  it("gives a single-map page's view the data its pane stored", () => {
     const data = [{ id: 1 }];
-    const page = { ...visualisation, data };
-    const state = { visualisations: { [VIS]: page }, paneOverrides: {}, paneData: { main: { [VIS]: data } } };
-    expect(selectPaneView(state, "main", VIS)).toBe(page);
+    const base = { visualisations: { [VIS]: visualisation }, paneOverrides: {}, paneData: {} };
+    const next = { ...base, ...mapReducer(base, { type: "UPDATE_ALL_DATA", payload: { visualisationName: VIS, data, paneId: "main" } }) };
+    expect(next.visualisations[VIS].data).toBeUndefined();
+    expect(selectPaneView(next, "main", VIS).data).toBe(data);
+  });
+
+  it("uses data stored without a pane where the pane has none", () => {
+    const page = { ...visualisation, data: [{ id: 1 }] };
     expect(selectPaneView({ visualisations: { [VIS]: page } }, "main", VIS)).toBe(page);
   });
 });

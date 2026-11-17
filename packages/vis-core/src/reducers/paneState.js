@@ -113,42 +113,26 @@ export function applyVisualisationParam(state, { visualisationNames, panes, fiel
 }
 
 /**
- * Stores a pane's fetched data for a visualisation. The page copy's `data` becomes all the
- * panes' data together (just this data on a single-map page), for readers that want the
- * whole picture, such as the legend.
+ * Stores a pane's fetched data for a visualisation, in `paneData`. Readers combine panes'
+ * data through the selectors (`selectClassificationData`, `selectPaneView`).
  *
  * @param {Object} state
  * @param {{ visualisationName: string, data: *, paneId?: string }} payload - Without
- *   `paneId`, the data goes on the page copy only.
+ *   `paneId`, the data goes on the page copy instead (`state.visualisations[name].data`).
  * @returns {{ visualisations: Object, paneData: Object }}
  */
 export function applyPaneData(state, { visualisationName, data, paneId }) {
-  const vis = state.visualisations[visualisationName];
   const paneData = state.paneData ?? {};
   if (!paneId) {
+    const vis = state.visualisations[visualisationName];
     return {
       paneData,
       visualisations: { ...state.visualisations, [visualisationName]: { ...vis, data } },
     };
   }
-
-  const nextPaneData = {
-    ...paneData,
-    [paneId]: { ...(paneData[paneId] ?? {}), [visualisationName]: data },
-  };
-  const showing = panesShowing(gridOf(state), { visualisation: visualisationName });
-  const others = showing.filter((id) => id !== paneId);
-  const combined =
-    others.length === 0
-      ? data
-      : showing.flatMap((id) => {
-          const paneValue = nextPaneData[id]?.[visualisationName];
-          return Array.isArray(paneValue) ? paneValue : [];
-        });
-
   return {
-    paneData: nextPaneData,
-    visualisations: { ...state.visualisations, [visualisationName]: { ...vis, data: combined } },
+    paneData: { ...paneData, [paneId]: { ...(paneData[paneId] ?? {}), [visualisationName]: data } },
+    visualisations: state.visualisations,
   };
 }
 

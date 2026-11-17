@@ -56,8 +56,9 @@ export const selectPaneData = (state, paneId, visualisationName) =>
 /**
  * Everything one pane shows for a visualisation: its params (see `selectPaneVisualisation`)
  * and its own data rather than all panes' data together. Where several panes show the
- * visualisation, a pane with no data stored yet has none (not another pane's). Returns the
- * page's copy itself when neither differs, as on a single-map page.
+ * visualisation, a pane with no data stored yet has none (not another pane's); where only it
+ * does, data stored without a pane on the page copy still applies. Returns a new object when
+ * the pane has data, so callers memoise on the state they read.
  *
  * @param {Object} state
  * @param {string} paneId
@@ -69,9 +70,11 @@ export function selectPaneView(state, paneId, visualisationName) {
   if (!visualisation) return visualisation;
   const shared = selectPanesShowing(state, { visualisation: visualisationName }).length > 1;
   const stored = selectPaneData(state, paneId, visualisationName);
-  const data = stored === undefined && shared ? [] : stored;
-  if (data === undefined || data === visualisation.data) return visualisation;
-  return { ...visualisation, data };
+  // A pane that hasn't fetched yet has no data of its own where several panes show the
+  // visualisation; otherwise data stored without a pane (on the page copy) still applies.
+  if (stored === undefined) return shared ? { ...visualisation, data: [] } : visualisation;
+  if (stored === visualisation.data) return visualisation;
+  return { ...visualisation, data: stored };
 }
 
 /**
