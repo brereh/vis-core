@@ -73,6 +73,7 @@ function useFeatureFocus(state, dispatch, primaryPaneId) {
   const labelTimeoutsRef = useRef({});
   const primaryMap = selectPaneMap(state, primaryPaneId);
 
+  // Runs on each new focus request; the registered maps it reads are current at that moment.
   useEffect(() => {
     const focus = state.mapBoundsAndCentroid;
     if (!primaryMap || !focus) return;

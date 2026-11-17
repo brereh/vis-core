@@ -483,7 +483,7 @@ Behaviour pinned so later phases keep it:
 
 *Exit:* `Map.test` and `DualMaps.test` are re-expressed against `MapPane`, parameterised over the 1×1 and 1×2 presets. Fixes 7–10 are flipped. BaseApp's dual pages are checked by hand on desktop and mobile (the §4 pre-merge check).
 
-**Phase 3 result.** Full suite: 120 suites and 1030 tests, all passing, and no known-drift tests remain.
+**Phase 3 result.** Full suite: 120 suites and 1032 tests, all passing, and no known-drift tests remain.
 
 **What replaced what:**
 
@@ -517,7 +517,7 @@ Map-click filters also change on dual pages:
 - They respect `filter.panes`: a filter named "Left …" changes only the left pane (before, both).
 - Each pane looks up its feature at the click's location projected onto its own map (before, the same screen point on both maps).
 - The action's configured payload is passed on (before, it was dropped on dual pages).
-- When several map-click filters' layers are under the click, the top-most feature decides, and of several filters on one layer only the first applies, as on the single map. (Before, dual pages applied every map-click filter.)
+- When several map-click filters' layers are under the click, the top-most feature decides, and of several filters on one layer only the first applies to each pane, as on the single map. A "Left …" and a "Right …" filter on one layer still each apply to their own pane. (Before, dual pages applied every map-click filter.)
 - A map-click filter targeting one pane (say "Left …") is also re-sent by `MapLayout` when its value changes, as on single pages, and its initial value is sent at load.
 - On touch devices a tap runs the map-click filter from both `touchend` and the map's `click`, as single pages already did; the second run repeats the same values.
 

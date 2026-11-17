@@ -163,6 +163,28 @@ describe("applyMapFilterClick across panes", () => {
     expect(filterDispatch).not.toHaveBeenCalled();
   });
 
+  it("applies a Left and a Right filter on the same layer, each to its own pane", () => {
+    const maps = panes([zone(1)], [zone(2)]);
+    const left = zoneFilter({ id: "left-zone", panes: ["left"] });
+    const right = zoneFilter({ id: "right-zone", panes: ["right"] });
+    click(maps, [left, right], "left");
+
+    expect(queryDispatches()).toEqual([
+      [["left"], 100],
+      [["right"], 200],
+    ]);
+    expect(filterDispatch.mock.calls.map(([a]) => [a.payload.filterId, a.payload.value])).toEqual([
+      ["left-zone", 100],
+      ["right-zone", 200],
+    ]);
+  });
+
+  it("applies only the first filter on a layer to each pane", () => {
+    const maps = panes([zone(1)], [zone(2)]);
+    click(maps, [zoneFilter({ panes: ["left", "right"] }), zoneFilter({ id: "again", panes: ["right"] })], "left");
+    expect(filterDispatch.mock.calls.map(([a]) => a.payload.filterId)).toEqual(["zone"]);
+  });
+
   it("keeps each pane's selection separately", () => {
     const maps = panes([zone(1)], [zone(2)]);
     click(maps, [zoneFilter({ panes: ["left", "right"] })], "left");

@@ -13,6 +13,7 @@ import { FilterContext } from "contexts/FilterContext";
 import { createFakeMap, createFeature, FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
 import { useMapBrowserEnv } from "testing/browserEnv";
 import { resolveMapGrid } from "../../map/resolveMapGrid";
+import { getBaseMap } from "../../map/baseMaps";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("hooks/useMap", () => ({ useMap: jest.fn() }));
@@ -187,7 +188,7 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
     const { maps: transitionMaps, applicationLayers, descriptor } = useBaseMapTransition.mock.calls.at(-1)[0];
     expect(transitionMaps).toEqual(paneIds.map((id) => maps[id]));
     expect(applicationLayers).toBe(state.layers);
-    expect(descriptor).toEqual(expect.objectContaining({ id: expect.any(String) }));
+    expect(descriptor).toBe(getBaseMap(state.baseMapId));
   });
 
   describe("what each pane draws", () => {
@@ -223,10 +224,17 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
       SpiderLayer.mock.calls.forEach(([props]) => expect(props.map).toBeNull());
       expect(screen.queryByTestId("legend")).not.toBeInTheDocument();
 
+      // Map visualisations get the map straight away, as before.
+      const earlyVisProps = latestProps(MapVisualisation, (p) => `${p.paneId}:${p.visualisationName}`);
+      paneIds.forEach((id) => expect(earlyVisProps.get(`${id}:Accessibility`).map).toBe(maps[id]));
+
       Layer.mockClear();
+      SpiderLayer.mockClear();
       becomeReady();
       const layerProps = latestProps(Layer, (p) => `${p.paneId}:${p.layer.name}`);
       paneIds.forEach((id) => expect(layerProps.get(`${id}:${ZONES}`).map).toBe(maps[id]));
+      const spiderMaps = SpiderLayer.mock.calls.map(([props]) => props.map);
+      paneIds.forEach((id) => expect(spiderMaps).toContain(maps[id]));
       expect(screen.getByTestId("legend")).toBeInTheDocument();
     });
 
