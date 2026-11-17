@@ -12,8 +12,7 @@ import { useLayerZoomMessage } from "hooks/useLayerZoomMessage";
 import { useDebounced } from "hooks/useDebounced";
 import { loremIpsum, updateFilterValidity, getInitialFilterValue } from "utils";
 import { defaultBgColour } from "defaults";
-import DualMaps from "./DualMaps";
-import Map from "./Map";
+import MapGrid from "./MapGrid";
 import { actionTypes } from "reducers";
 
 const LayoutContainer = styled.div`
@@ -351,18 +350,16 @@ export const MapLayout = () => {
    * the UI updates dependent dropdown options immediately, while map/API work waits until
    * the user has stopped changing filters.
    */
-  const isMultiPane = (state.mapGrid?.paneIds?.length ?? 1) > 1;
-
   useEffect(() => {
     if (isFiltersDebouncing) return;
 
     state.filters.forEach((filter) => {
       const filterValue = debouncedFilterState[filter.id];
 
-      // On pages with several map panes, the panes dispatch map-click filters themselves,
-      // each with the feature under the click on its own map. The filter state holds a single
-      // value, so re-dispatching it here would give every pane the same feature.
-      if (filter.type === "map" && isMultiPane) return;
+      // A map-click filter on several panes is dispatched by the panes themselves, each with
+      // the feature under the click on its own map. The filter state holds a single value, so
+      // re-dispatching it here would give every pane the same feature.
+      if (filter.type === "map" && (filter.panes?.length ?? 0) > 1) return;
 
       filter.actions.forEach((action) => {
         dispatch({
@@ -371,7 +368,7 @@ export const MapLayout = () => {
         });
       });
     });
-  }, [debouncedFilterState, state.filters, dispatch, buildFilterActionPayload, isFiltersDebouncing, isMultiPane]);
+  }, [debouncedFilterState, state.filters, dispatch, buildFilterActionPayload, isFiltersDebouncing]);
 
   const handleColorChange = (color, layerName) => {
     dispatch({
@@ -454,14 +451,13 @@ export const MapLayout = () => {
         })}
       </Sidebar>
 
-      {pageContext.type === "MapLayout" && (
+      {(pageContext.type === "MapLayout" || pageContext.type === "DualMapLayout") && (
         <MapContainer>
-          <Map extraCopyrightText={pageContext.extraCopyrightText ?? ""} sidebarIsOpen={sidebarIsOpen} showMapStyleToggle={false}/>
-        </MapContainer>
-      )}
-      {pageContext.type === "DualMapLayout" && (
-        <MapContainer>
-          <DualMaps extraCopyrightText={pageContext.extraCopyrightText ?? "" } showMapStyleToggle={false}/>
+          <MapGrid
+            extraCopyrightText={pageContext.extraCopyrightText ?? ""}
+            sidebarIsOpen={sidebarIsOpen}
+            showMapStyleToggle={false}
+          />
         </MapContainer>
       )}
 

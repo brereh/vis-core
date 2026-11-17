@@ -2,13 +2,10 @@
  * Layers on a side-by-side page: each pane's map should get each layer once, with that
  * pane's tiles.
  *
- * Only the probes (`renderLayerOnPanes`) know how panes render layers today: DualMaps renders
- * every <Layer> once per pane, and each instance adds itself to every registered pane map.
- * Phase 3 of docs/Map Panes Consolidation Plan.md gives each pane its own <Layer map=…>, and
- * only the probes change.
- *
- * "known drift" tests use `test.failing`. Their preconditions are pinned by ordinary tests
- * next to them, so a broken setup can't make a known-drift test pass by accident.
+ * Only the probes (`renderLayerOnPanes`) know how panes render layers: each map pane renders
+ * its own <Layer map=… paneId=…> for each layer it shows. (Before Phase 3 of
+ * docs/Map Panes Consolidation Plan.md, every pane's Layer added itself to every pane's map;
+ * the tests for §2.2(7) were known drift until then.)
  */
 import { act, render, waitFor } from "@testing-library/react";
 import { MapContext } from "contexts/MapContext";
@@ -106,13 +103,12 @@ const paneContext = (layer, maps) => ({
   dispatch: jest.fn(),
 });
 
-const panes = (layer, context, paneCount = 2) => (
+const panes = (layer, context, maps, paneIds = ["left", "right"]) => (
   <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
     <MapContext.Provider value={context}>
-      {/* DualMaps renders the layer list once inside each pane's container, and each
-          instance adds the layer to every registered pane map. */}
-      {Array.from({ length: paneCount }, (_, i) => (
-        <Layer key={i} layer={layer} />
+      {/* Each pane renders the layer on its own map. */}
+      {paneIds.map((paneId) => (
+        <Layer key={paneId} layer={layer} map={maps[paneId]} paneId={paneId} />
       ))}
     </MapContext.Provider>
   </FilterContext.Provider>
@@ -124,8 +120,11 @@ const panes = (layer, context, paneCount = 2) => (
  */
 const renderLayerOnPanes = (layer, maps) => {
   const context = paneContext(layer, maps);
-  const view = render(panes(layer, context));
-  return { ...view, stopShowingOnOnePane: () => view.rerender(panes(layer, context, 1)) };
+  const view = render(panes(layer, context, maps));
+  return {
+    ...view,
+    stopShowingOnOnePane: () => view.rerender(panes(layer, context, maps, ["left"])),
+  };
 };
 
 // ------------------------------------------------------------------------------------------
@@ -169,8 +168,8 @@ describe("layers on side-by-side panes", () => {
   });
 });
 
-describe("known drift (plan §2.2(7)): each pane's layer is set up by both panes", () => {
-  test.failing("adds a GeoJSON layer's source to each pane's map only once", async () => {
+describe("each pane sets up its own layer once (fixed drift, plan §2.2(7))", () => {
+  test("adds a GeoJSON layer's source to each pane's map only once", async () => {
     const maps = createPaneMaps();
     renderLayerOnPanes(geojsonLayer, maps);
     await waitFor(() => {
@@ -183,7 +182,7 @@ describe("known drift (plan §2.2(7)): each pane's layer is set up by both panes
     expect(maps.right.duplicateSources).toEqual([]);
   });
 
-  test.failing("fetches a GeoJSON layer once per pane", async () => {
+  test("fetches a GeoJSON layer once per pane", async () => {
     const maps = createPaneMaps();
     renderLayerOnPanes(geojsonLayer, maps);
     await flushFetches();
@@ -193,7 +192,7 @@ describe("known drift (plan §2.2(7)): each pane's layer is set up by both panes
     expect(api.geodataService.getLayer.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
-  test.failing("keeps the layer on a pane that still shows it", () => {
+  test("keeps the layer on a pane that still shows it", () => {
     const maps = createPaneMaps();
     const { stopShowingOnOnePane } = renderLayerOnPanes(tileLayer, maps);
 

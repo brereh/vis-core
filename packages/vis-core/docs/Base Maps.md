@@ -231,7 +231,7 @@ validateBaseMapDescriptor(BASE_MAPS.osOutdoor);
 
 ## Architecture and transition lifecycle
 
-When a base map switch is triggered, the transition is coordinated by [`useBaseMapTransition.js`](file:///C:/dev/Transport-for-the-North/vis-core/packages/vis-core/src/hooks/useBaseMapTransition.js). Both single map views ([`Map.jsx`](file:///C:/dev/Transport-for-the-North/vis-core/packages/vis-core/src/Components/MapLayout/Map.jsx)) and side-by-side comparison views ([`DualMaps.jsx`](file:///C:/dev/Transport-for-the-North/vis-core/packages/vis-core/src/Components/MapLayout/DualMaps.jsx)) share this coordinator.
+When a base map switch is triggered, the transition is coordinated by [`useBaseMapTransition.js`](file:///C:/dev/Transport-for-the-North/vis-core/packages/vis-core/src/hooks/useBaseMapTransition.js). The map grid ([`MapGrid.jsx`](../src/Components/MapLayout/MapGrid.jsx)) runs it once for every pane's map, so single-map and side-by-side pages share this coordinator.
 
 ### Transition flow
 

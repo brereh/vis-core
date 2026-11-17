@@ -332,7 +332,8 @@ Everything not listed here should behave exactly as before. Each change is calle
 - name a filter with "Left"/"Right" on a visualisation without "Side" in its name
 - set `sides` on a filter or on one of its actions
 - target a callout card with `UPDATE_DUAL_*`
-- are dual pages whose name doesn't contain "Side-by-Side" and that use banding or metric-dependent layer controls
+- belong to pages whose name doesn't contain "Side-by-Side" and use banding or metric-dependent layer controls
+- set up map-click filters with "Left"/"Right" in their names, which now change only that pane (Phase 3)
 
 Also find single-map configs that use `UPDATE_DUAL_*` or `separateSidePaths`.
 
@@ -481,6 +482,56 @@ Behaviour pinned so later phases keep it:
 - Delete `DualMaps.jsx`, `useDualMaps.jsx` and `Map.jsx`.
 
 *Exit:* `Map.test` and `DualMaps.test` are re-expressed against `MapPane`, parameterised over the 1×1 and 1×2 presets. Fixes 7–10 are flipped. BaseApp's dual pages are checked by hand on desktop and mobile (the §4 pre-merge check).
+
+**Phase 3 result.** Full suite: 120 suites and 1019 tests, all passing, and no known-drift tests remain.
+
+**What replaced what:**
+
+| Before | Now |
+|---|---|
+| `Map.jsx`, `DualMaps.jsx` | `MapPane.jsx` (one map per pane) inside `MapGrid.jsx` (the page's grid) |
+| `useDualMaps.jsx` | Removed: every pane uses `useMap`. Camera sync is the map group's job. |
+| `VisualisationManager.jsx` | `CalloutCardStack.jsx` (cards only). Each pane draws its own map visualisations. |
+| per-component map-click handlers | `map/interactions/mapFilterClick.js` |
+
+- **New modules:**
+  - `src/map/mapGroup.js` and `MapGroupContext.jsx`: camera sync per sync group, pointer events shared within a group, a selection per pane
+  - `src/map/touchPolicy.js`
+- **`Layer` and `SpiderLayer`** take their pane's `map` (and `paneId`) as props, so each pane sets up its own layers once.
+- **`useMap`** gains `compactAttribution` and `tileCacheSize` options, the shared touch policy, and a `ResizeObserver` on its container.
+- **`MapLayout`** renders `MapGrid` for both page types, and leaves only map-click filters that target several panes to the panes.
+- **Tests:**
+  - `MapGrid.test.jsx` runs each behaviour of the former `Map.test` and `DualMaps.test` on both presets.
+  - The probe-based tests changed only their probes (and files named after deleted components were renamed: `SideBySide.panes`, `MapPane.touch`, `MapPane.registration`).
+  - New unit tests cover the map group, map-click filters and the touch policy.
+
+**Behaviour changes on dual pages.** These are the intended ones from §4:
+- Everything the single map does is now available: spider layers, tap tooltips (the tapped feature on the tapped pane, the feature at that location on the other), the hover fallback on touch devices that hover, viewport filters, the draw control (on the left pane), the temporary feature label (on both panes), `visualisedFeatureIds` filtering, zoom tracking (from the left pane) and the mobile attribution bar.
+- Leaving a map clears both panes' tooltips (§2.2(11)).
+- Each pane sets up its layers once (§2.2(7)), and the card stack is drawn once (§2.2(8)).
+- Layer-click popups use the single map's options (`closeOnClick: false`) and are skipped on touch devices, where the tap tooltip stands in.
+- Compact attribution on both maps (before, the right map only).
+
+Map-click filters also change on dual pages:
+- They respect `filter.panes`: a filter named "Left …" changes only the left pane (before, both).
+- Each pane looks up its feature at the click's location projected onto its own map (before, the same screen point on both maps).
+- The action's configured payload is passed on (before, it was dropped on dual pages).
+- When several map-click filters' layers are under the click, the top-most feature decides, as on the single map.
+
+**Behaviour changes on single-map pages:**
+- Clicking where there is no feature keeps the map-click selection (§4).
+- The one-finger-pan touch policy and the narrow-desktop-window fix apply (§4).
+- Resizing follows the container (§4).
+- There is one map-click selection per pane: selecting a feature of another filter's layer clears the first highlight (before, each layer kept its own). A feature without an id gets the GeoJSON fallback highlight.
+- The pointer cursor also shows over layers with hover tooltips, not only click tooltips.
+
+**Unchanged:**
+- the legend's choice of map on dual pages (the right pane, unless only the left has data)
+- the legend's and card stack's positions on screen (they are now drawn over the grid, whose bottom-right corner is the right pane's)
+
+**Not yet:**
+- grid configs other than the presets, independent panes and own classification (Phase 4)
+- `state.drawPaneId` (Phase 5)
 
 ### Phase 4: Grid config and layout
 - `config.grid`: placement, spans, relative sizes, validation, sync groups other than `"default"` and `null`, `classification: "own"` (own bins and its own legend section), the pane cap warning and tile-cache sizing, the mobile one-column layout, and the `webglcontextlost` message.

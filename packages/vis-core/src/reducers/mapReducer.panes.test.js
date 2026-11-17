@@ -29,7 +29,7 @@ const storePaneData = (state, pane, visName, data) =>
 /** The map instances registered for the page. */
 const registeredMaps = (state) => selectMaps(state);
 
-/** Registers maps for a side-by-side page, as DualMaps does once its maps are ready. */
+/** Registers maps for a side-by-side page, as each pane does once its map is ready. */
 const registerDualMaps = (state, left, right) => {
   const withLeft = mapReducer(state, {
     type: actionTypes.SET_PANE_MAP,

@@ -1,5 +1,5 @@
 /**
- * Tap tooltips on the single map, on touch devices without hover.
+ * Tap tooltips on a single-map page, on touch devices without hover.
  *
  * On these devices a tap stands in for hover: the tapped feature's tooltip opens, including
  * on layers that only configure click tooltips (whose click popups are skipped on touch).
@@ -10,17 +10,19 @@ import { MapContext } from "contexts/MapContext";
 import { FilterContext } from "contexts/FilterContext";
 import { createFakeMap, createFeature, FakePopup, resetMapLibreFake } from "testing/mapLibreFake";
 import { useMapBrowserEnv } from "testing/browserEnv";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("hooks/useMap", () => ({ useMap: jest.fn() }));
 jest.mock("hooks/useBaseMapTransition", () => ({ useBaseMapTransition: jest.fn() }));
 jest.mock("./Layer", () => ({ Layer: () => null }));
 jest.mock("./SpiderLayer", () => ({ SpiderLayer: () => null }));
-jest.mock("./VisualisationManager", () => ({ VisualisationManager: () => null }));
+jest.mock("./CalloutCardStack", () => ({ CalloutCardStack: () => null }));
+jest.mock("./MapVisualisation", () => ({ MapVisualisation: () => null }));
 jest.mock("Components/DynamicLegend/DynamicLegend", () => ({ DynamicLegend: () => null }));
 
 import { useMap } from "hooks/useMap";
-import Map from "./Map";
+import MapGrid from "./MapGrid";
 
 const LNG_LAT = { lng: -1.55, lat: 53.8 };
 
@@ -37,6 +39,10 @@ const renderMap = (map, layers) => {
         <MapContext.Provider
           value={{
             state: {
+              mapGrid: resolveMapGrid({
+                type: "MapLayout",
+                config: { layers: Object.keys(layers).map((name) => ({ name })) },
+              }),
               layers,
               visualisations: {},
               filters: [],
@@ -46,7 +52,7 @@ const renderMap = (map, layers) => {
             dispatch: jest.fn(),
           }}
         >
-          <Map extraCopyrightText="" />
+          <MapGrid extraCopyrightText="" />
         </MapContext.Provider>
       </FilterContext.Provider>
     </ThemeProvider>

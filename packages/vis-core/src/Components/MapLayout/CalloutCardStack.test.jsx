@@ -1,4 +1,4 @@
-import { VisualisationManager } from "./VisualisationManager";
+import { CalloutCardStack } from "./CalloutCardStack";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MapContext } from "contexts";
@@ -39,14 +39,9 @@ jest.mock("./CalloutCards/BaseCalloutCardVisualisation", () => ({
 }));
 
 jest.mock("./MapVisualisation", () => ({
-  MapVisualisation: ({ visualisationName, map, maps, left }) => {
-    return (
-      <div data-testid="callout-card-visualisation">
-        Mock CalloutCardVisualisation - {visualisationName} -{" "}
-        {JSON.stringify(map)} - {JSON.stringify(maps)} - {left}
-      </div>
-    );
-  },
+  MapVisualisation: ({ visualisationName }) => (
+    <div data-testid="map-visualisation">Mock MapVisualisation - {visualisationName}</div>
+  ),
 }));
 
 jest.mock("Components/ScrollableContainer", () => ({
@@ -104,7 +99,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
   it("classic use", () => {
     render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} />
+        <CalloutCardStack {...props} />
       </MapContext.Provider>
     );
     const cardName = screen.getByText(/Mock BaseCalloutCardVisualisation - calloutCard - Test Card/i);
@@ -115,7 +110,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
   it("sets show-on-mobile based on presence of configured cards", () => {
     const { rerender } = render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} />
+        <CalloutCardStack {...props} />
       </MapContext.Provider>
     );
     expect(screen.getByTestId("scrollable-container")).toHaveAttribute(
@@ -126,7 +121,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
     // Re-render with no cards
     rerender(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} visualisationConfigs={{}} />
+        <CalloutCardStack {...props} visualisationConfigs={{}} />
       </MapContext.Provider>
     );
     
@@ -141,7 +136,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} />
+        <CalloutCardStack {...props} />
       </MapContext.Provider>
     );
 
@@ -168,7 +163,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} />
+        <CalloutCardStack {...props} />
       </MapContext.Provider>
     );
 
@@ -193,7 +188,7 @@ describe("Test to render a CalloutVisualisationCard", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...props} />
+        <CalloutCardStack {...props} />
       </MapContext.Provider>
     );
 
@@ -212,43 +207,20 @@ describe("Test to render a CalloutVisualisationCard", () => {
   });
 });
 
-describe("Test to render a Map", () => {
-  const propsType1 = {
-    visualisationConfigs: {
-      map: {
-        type: "geojson",
-        queryParams: {},
-      },
-    },
-    map: {},
-  };
-  const propsType2 = {
-    visualisationConfigs: {
-      map: {
-        type: "geojson",
-        queryParams: {},
-      },
-    },
-    map: {},
-  };
-  it("render a map with the geojson type", () => {
+describe("map visualisations", () => {
+  it("are left to the map panes: the card stack draws only callout cards", () => {
     render(
       <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...propsType1} />
+        <CalloutCardStack
+          visualisationConfigs={{
+            zones: { type: "joinDataToMap", queryParams: {} },
+            flows: { type: "geojson", queryParams: {} },
+            summary: { type: "calloutCard" },
+          }}
+        />
       </MapContext.Provider>
     );
-    expect(
-      screen.getByText(/Mock CalloutCardVisualisation/)
-    ).toBeInTheDocument();
-  });
-  it("render a map with the joinDataToMap type", () => {
-    render(
-      <MapContext.Provider value={mockMapContext}>
-        <VisualisationManager {...propsType2} />
-      </MapContext.Provider>
-    );
-    expect(
-      screen.getByText(/Mock CalloutCardVisualisation/)
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId("map-visualisation")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("callout-card-visualisation")).toHaveLength(1);
   });
 });

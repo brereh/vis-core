@@ -199,13 +199,9 @@ jest.mock("Components/Dimmer", () => ({
       );
     }
   }));
-jest.mock("./Map", () => ({
-  Map: ({ extraCopyrightText }) => <div>Map: {extraCopyrightText}</div>,
-}));
-jest.mock("./DualMaps", () => ({
-  DualMaps: ({ extraCopyrightText }) => (
-    <div>DualMaps: {extraCopyrightText}</div>
-  ),
+jest.mock("./MapGrid", () => ({
+  __esModule: true,
+  default: ({ extraCopyrightText }) => <div>MapGrid: {extraCopyrightText}</div>,
 }));
 
 describe("MapLayout component test", () => {
@@ -459,7 +455,7 @@ describe("map-click filters on dual maps", () => {
     jest.clearAllMocks();
   });
 
-  it("leaves map-click filters to DualMaps instead of sending their single value to both sides", () => {
+  it("leaves map-click filters on several panes to the panes instead of sending one value to all", () => {
     const zoneFilter = {
       id: "zone-filter",
       type: "map",
@@ -573,5 +569,24 @@ describe("actions that name their own target", () => {
     expect(payloadsFor("UPDATE_DUAL_QUERY_PARAMS").length).toBeGreaterThan(0);
     expect(payloadsFor("UPDATE_QUERY_PARAMS").length).toBeGreaterThan(0);
     expect(payloadsFor("UPDATE_PATH_PARAMS").length).toBeGreaterThan(0);
+  });
+});
+
+describe("map pages", () => {
+  it.each(["MapLayout", "DualMapLayout"])("render the map grid for a %s page", (type) => {
+    render(
+      <ThemeProvider theme={theme}>
+        <AppContext.Provider value={mockAppContexte}>
+          <PageContext.Provider value={{ ...mockPageContext, type, extraCopyrightText: "TfN" }}>
+            <FilterContext.Provider value={mockFilterContext}>
+              <MapContext.Provider value={mockMapContext}>
+                <MapLayout />
+              </MapContext.Provider>
+            </FilterContext.Provider>
+          </PageContext.Provider>
+        </AppContext.Provider>
+      </ThemeProvider>
+    );
+    expect(screen.getByText("MapGrid: TfN")).toBeInTheDocument();
   });
 });

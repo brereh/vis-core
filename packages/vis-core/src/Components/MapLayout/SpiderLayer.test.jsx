@@ -62,7 +62,7 @@ describe("SpiderLayer Component", () => {
     };
 
     mockMapContext = {
-      state: { map: mockMap },
+      state: {},
     };
 
     useMapContext.mockReturnValue(mockMapContext);
@@ -86,7 +86,7 @@ describe("SpiderLayer Component", () => {
    * Tests that the component correctly binds to map events on mount.
    */
   it("should bind map events on mount", () => {
-    render(<SpiderLayer baseLayerId="baseLayer" />);
+    render(<SpiderLayer baseLayerId="baseLayer" map={mockMap} />);
 
     expect(mockMap.on).toHaveBeenCalledWith("sourcedata", expect.any(Function));
     expect(mockMap.on).toHaveBeenCalledWith("zoomend", expect.any(Function));
@@ -98,7 +98,7 @@ describe("SpiderLayer Component", () => {
    * Tests the debounced rebuild process triggered by map events.
    */
   it("should trigger rebuild and mirror properties on sourcedata event", async () => {
-    render(<SpiderLayer baseLayerId="baseLayer" />);
+    render(<SpiderLayer baseLayerId="baseLayer" map={mockMap} />);
 
     // Extract the sourcedata callback
     const sourceDataCallback = mockMap.on.mock.calls.find(
@@ -151,7 +151,7 @@ describe("SpiderLayer Component", () => {
     
     mockMap.getSource.mockImplementation((id) => id.includes("spider"));
 
-    const { unmount } = render(<SpiderLayer baseLayerId="baseLayer" />);
+    const { unmount } = render(<SpiderLayer baseLayerId="baseLayer" map={mockMap} />);
 
     unmount();
 
@@ -182,7 +182,7 @@ describe("SpiderLayer Component", () => {
   it("should do nothing if base layer is missing or not a circle", () => {
     mockMap.getLayer.mockReturnValue(null); // Layer doesn't exist
 
-    render(<SpiderLayer baseLayerId="missingLayer" />);
+    render(<SpiderLayer baseLayerId="missingLayer" map={mockMap} />);
 
     expect(mockMap.on).not.toHaveBeenCalled();
   });

@@ -1,4 +1,4 @@
-// Centralized tooltip helpers to keep Map and DualMaps lean
+// Tooltip HTML helpers, used by the shared map interactions (map/interactions/tooltipContent.js).
 // NOTE: Keep templates minimal and consistent with existing CSS classes
 
 /**
