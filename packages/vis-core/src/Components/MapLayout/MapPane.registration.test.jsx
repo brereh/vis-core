@@ -1,5 +1,5 @@
 /**
- * The single map registering itself as the page's pane, using the real map reducer.
+ * A single-map page's pane registering its map, using the real map reducer.
  */
 import { useReducer } from "react";
 import { act, render } from "@testing-library/react";
@@ -17,11 +17,12 @@ jest.mock("hooks/useMap", () => ({ useMap: jest.fn() }));
 jest.mock("hooks/useBaseMapTransition", () => ({ useBaseMapTransition: jest.fn() }));
 jest.mock("./Layer", () => ({ Layer: () => null }));
 jest.mock("./SpiderLayer", () => ({ SpiderLayer: () => null }));
-jest.mock("./VisualisationManager", () => ({ VisualisationManager: () => null }));
+jest.mock("./CalloutCardStack", () => ({ CalloutCardStack: () => null }));
+jest.mock("./MapVisualisation", () => ({ MapVisualisation: () => null }));
 jest.mock("Components/DynamicLegend/DynamicLegend", () => ({ DynamicLegend: () => null }));
 
 import { useMap } from "hooks/useMap";
-import Map from "./Map";
+import MapGrid from "./MapGrid";
 
 useMapBrowserEnv();
 beforeEach(() => resetMapLibreFake());
@@ -50,7 +51,7 @@ const renderWithReducer = (map) => {
   const tree = (showMap) => (
     <ThemeProvider theme={{ mq: { mobile: "(max-width: 900px)" } }}>
       <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
-        <Provider>{showMap && <Map extraCopyrightText="" />}</Provider>
+        <Provider>{showMap && <MapGrid extraCopyrightText="" />}</Provider>
       </FilterContext.Provider>
     </ThemeProvider>
   );

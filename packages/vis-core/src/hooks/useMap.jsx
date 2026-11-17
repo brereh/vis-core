@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { mapOptions, attributionText, rememberInitialBaseSources } from "../map/mapSetup";
+import { applyTouchPolicy } from "../map/touchPolicy";
 
 /**
  * Custom hook to initialize and manage a MapLibre map.
@@ -10,9 +11,20 @@ import { mapOptions, attributionText, rememberInitialBaseSources } from "../map/
  * @param {Array<number>} mapCentre - The initial map center coordinates [longitude, latitude].
  * @param {number} mapZoom - The initial map zoom level.
  * @param {string} extraCopyrightText - Extra copyright text that needs to go in the bottom right bar.
+ * @param {Object} [options]
+ * @param {boolean} [options.compactAttribution=false] - Collapse the attribution to a button, for
+ *   maps sharing the screen with others.
+ * @param {number} [options.tileCacheSize] - Tiles to keep in memory (see map/mapSetup.js).
  * @returns {Object} An object containing the map instance, map style loaded state, map loaded state, and map ready state.
  */
-export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyrightText) => {
+export const useMap = (
+  mapContainerRef,
+  mapStyle,
+  mapCentre,
+  mapZoom,
+  extraCopyrightText,
+  { compactAttribution = false, tileCacheSize } = {}
+) => {
   const [map, setMap] = useState(null);
   const [isMapStyleLoaded, setIsMapStyleLoaded] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -54,7 +66,7 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
       }
 
       mapInstance = new maplibregl.Map(
-        mapOptions({ container, mapStyle, mapCentre, mapZoom })
+        mapOptions({ container, mapStyle, mapCentre, mapZoom, tileCacheSize })
       );
 
       // Add event listeners after map creation
@@ -68,7 +80,7 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
 
       const nav = new maplibregl.NavigationControl({ showZoom: true, showCompass: true });
       const attrib = new maplibregl.AttributionControl({
-        compact: false,
+        compact: compactAttribution,
         customAttribution: attributionText(extraCopyrightText)
       });
 
@@ -140,17 +152,15 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
 
       mapInstance.resize();
 
-      // Adjust map interactions for mobile devices
-      if (mql.matches) {
-        mapInstance.scrollZoom.disable();      // prevent single-finger zoom
-        mapInstance.dragPan.disable();         // prevent single-finger pan
-        mapInstance.doubleClickZoom.disable();
-        mapInstance.boxZoom.disable();
-        mapInstance.keyboard.disable();
+      // On phones and tablets: one-finger pan, two-finger zoom, no mouse or keyboard gestures.
+      applyTouchPolicy(mapInstance);
 
-        // keep two-finger zoom/pan
-        mapInstance.touchZoomRotate.enable();
-        mapInstance.touchZoomRotate.disableRotation(); // optional
+      // Fit the map to its container whenever the container changes size (grid cells resize
+      // with the window and the sidebar), not only when the window does.
+      let containerObserver;
+      if ('ResizeObserver' in window) {
+        containerObserver = new ResizeObserver(() => mapInstance.resize());
+        containerObserver.observe(container);
       }
 
       // Keep listeners active until the effect is cleaned up.
@@ -162,6 +172,7 @@ export const useMap = (mapContainerRef, mapStyle, mapCentre, mapZoom, extraCopyr
         }
 
         if (ro) ro.disconnect();
+        if (containerObserver) containerObserver.disconnect();
         window.removeEventListener('resize', updateNavOffset);
         window.removeEventListener('orientationchange', updateNavOffset);
       };

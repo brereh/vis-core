@@ -81,9 +81,8 @@ function mirrorToOverlay(map, baseLayerId) {
  * - Adds hover/select layers for spider overlays (point+line) using generic helpers [6][7].
  * - Mirrors parent paint/visibility to the overlay from the live map style.
  */
-export function SpiderLayer({ baseLayerId }) {
+export function SpiderLayer({ baseLayerId, map }) {
   const { state } = useMapContext();
-  const { map } = state;
   // Latest base-map theme, so overlay hover layers created later get the right colours.
   const themeRef = useRef("light");
   themeRef.current = getBaseMap(state.baseMapId)?.theme ?? "light";

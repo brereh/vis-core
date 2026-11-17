@@ -2,12 +2,9 @@
  * Behaviour of a side-by-side map page, written against fake maps so it describes what
  * the user sees on each pane rather than how the component calls MapLibre.
  *
- * Only `renderSideBySide` knows that DualMaps and useDualMaps provide the panes today.
- * Phase 3 of docs/Map Panes Consolidation Plan.md points it at the 1×2 grid preset; the
- * assertions stay as they are.
- *
- * "known drift" tests use `test.failing`: they describe the intended behaviour and fail
- * today because of the bugs in §2.2 of the plan.
+ * Only `renderSideBySide` knows how the panes are provided: since Phase 3 of
+ * docs/Map Panes Consolidation Plan.md, by the map grid's 1×2 preset (before, by DualMaps).
+ * The assertions didn't change; the known-drift test for §2.2(8) became an ordinary test.
  */
 import { render, screen } from "@testing-library/react";
 import { ThemeProvider } from "styled-components";
@@ -19,7 +16,7 @@ import { formatNumber } from "utils";
 import { resolveMapGrid } from "../../map/resolveMapGrid";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
-jest.mock("hooks/useDualMaps", () => ({ useDualMaps: jest.fn() }));
+jest.mock("hooks/useMap", () => ({ useMap: jest.fn() }));
 jest.mock("hooks/useBaseMapTransition", () => ({ useBaseMapTransition: jest.fn() }));
 jest.mock("./Layer", () => ({ Layer: () => null }));
 jest.mock("./MapVisualisation", () => ({ MapVisualisation: () => null }));
@@ -34,8 +31,8 @@ jest.mock("Components/DynamicLegend/DynamicLegend", () => ({
   DynamicLegend: () => <div data-testid="legend" />,
 }));
 
-import { useDualMaps } from "hooks/useDualMaps";
-import DualMaps from "./DualMaps";
+import { useMap } from "hooks/useMap";
+import MapGrid from "./MapGrid";
 
 const LAYER = "zones";
 const VIS = "Accessibility Side";
@@ -62,28 +59,32 @@ const baseState = (layerConfig = {}) => ({
     [LAYER]: { name: LAYER, visualisationName: VIS, shouldHaveTooltipOnHover: true, ...layerConfig },
   },
   visualisations: { [VIS]: visualisation, Summary: card },
-  mapGrid: resolveMapGrid({ type: "DualMapLayout", config: { visualisations: [visualisation, card] } }),
+  mapGrid: resolveMapGrid({
+    type: "DualMapLayout",
+    config: { visualisations: [visualisation, card], layers: [{ name: LAYER }] },
+  }),
   mapsByPane: {},
   paneOverrides: {},
   paneData: {},
   mapBoundsAndCentroid: null,
 });
 
-// --- probe: the only place that knows DualMaps provides the panes today -----------------
+// --- probe: the only place that knows how the panes are provided ------------------------
 
 const renderSideBySide = ({ state, maps }) => {
-  useDualMaps.mockReturnValue({
-    leftMap: maps.left,
-    rightMap: maps.right,
-    isMapStyleLoaded: true,
-    isMapLoaded: true,
-    isMapReady: true,
+  // Each pane builds its map with useMap: hand out the left map, then the right, one per pane.
+  const queue = [maps.left, maps.right];
+  const mapByContainer = new WeakMap();
+  useMap.mockImplementation((containerRef) => {
+    if (!mapByContainer.has(containerRef)) mapByContainer.set(containerRef, queue.shift());
+    const map = mapByContainer.get(containerRef);
+    return { map, isMapReady: true, isMapLoaded: true, isMapStyleLoaded: true };
   });
   return render(
     <ThemeProvider theme={{ mq: { mobile: "(max-width: 900px)" } }}>
       <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
-        <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
-          <DualMaps extraCopyrightText="" />
+        <MapContext.Provider value={{ state: { ...state, mapsByPane: maps }, dispatch: jest.fn() }}>
+          <MapGrid extraCopyrightText="" />
         </MapContext.Provider>
       </FilterContext.Provider>
     </ThemeProvider>
@@ -206,8 +207,8 @@ describe("dual tooltips match the single map (fixed drift, plan §2.2(1))", () =
   });
 });
 
-describe("known drift (plan §2.2(8)): one callout-card stack per page", () => {
-  test.failing("renders the card stack once, not once per pane", () => {
+describe("one callout-card stack per page (fixed drift, plan §2.2(8))", () => {
+  test("renders the card stack once, not once per pane", () => {
     const maps = { left: paneMap("left", []), right: paneMap("right", []) };
     renderSideBySide({ state: baseState(), maps });
 

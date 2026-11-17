@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollableContainer } from "Components/ScrollableContainer";
-import { MapVisualisation } from "./MapVisualisation";
 import { CalloutCardVisualisation } from "./CalloutCards/CalloutCardVisualisation";
 import { FullScreenCalloutCardVisualisation } from "./CalloutCards/FullScreenCalloutCardVisualisation";
 import { BaseCalloutCardVisualisation } from "./CalloutCards/BaseCalloutCardVisualisation";
@@ -8,8 +7,8 @@ import { BaseCalloutCardVisualisation } from "./CalloutCards/BaseCalloutCardVisu
 const UPDATE_MARKER_TIMEOUT_MS = 2800;
 
 /**
- * VisualisationManager component that renders the appropriate visualizations
- * based on the types specified in the visualisation configurations.
+ * The page's stack of callout cards: one per `calloutCard` visualisation, rendered once per
+ * page whatever the number of map panes. (Map visualisations are drawn by each pane.)
  *
  * Behaviour:
  * - Callout card order is stable during normal data updates.
@@ -18,28 +17,17 @@ const UPDATE_MARKER_TIMEOUT_MS = 2800;
  * - Mobile summary visibility is tracked via onVisibilityChange.
  *
  * @param {Object} props - The component props.
- * @param {Object} props.visualisationConfigs - Object of configuration objects for the visualizations.
- * @param {Object} props.map - The Maplibre JS map instance of the pane being drawn.
- * @param {string} props.paneId - The id of that map pane.
- * @returns {JSX.Element|null} The rendered visualization components.
+ * @param {Object} props.visualisationConfigs - The page's visualisations; only callout cards are used.
+ * @param {boolean} [props.sidebarIsOpen]
+ * @returns {JSX.Element} The card stack.
  */
-export const VisualisationManager = ({
-  visualisationConfigs,
-  map,
-  paneId,
-  ...props
-}) => {
+export const CalloutCardStack = ({ visualisationConfigs, ...props }) => {
   const sidebarIsOpen = props.sidebarIsOpen;
   // Convert visualisationConfigs object to an array of entries
   const visualisationEntries = Object.entries(visualisationConfigs);
   // Separate visualizations by type
   const calloutCardVisualisations = visualisationEntries.filter(
     ([_, config]) => config.type === "calloutCard"
-  );
-
-  const mapVisualisations = visualisationEntries.filter(
-    ([_, config]) =>
-      config.type === "joinDataToMap" || config.type === "geojson"
   );
 
   // Build a lookup for configs by name
@@ -222,16 +210,6 @@ export const VisualisationManager = ({
           );
         })}
       </ScrollableContainer>
-
-      {/* Render all MapVisualisations */}
-      {mapVisualisations.map(([name]) => (
-        <MapVisualisation
-          key={name}
-          visualisationName={name}
-          map={map}
-          paneId={paneId}
-        />
-      ))}
     </>
   );
 };

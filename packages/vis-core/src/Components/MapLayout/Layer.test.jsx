@@ -46,9 +46,6 @@ const mockMapContext = {
   },
   dispatch: jest.fn(),
 };
-// The single map is registered as the page's only pane.
-mockMapContext.state.mapsByPane = { main: mockMapContext.state.maps[0] };
-
 const mockFilterContext = {
   state: {
     filter: {
@@ -106,7 +103,7 @@ describe("Basic use Layer compoennt with type = 'tile'", () => {
   it("Basic use", () => {
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
     // layer.source = api and layer.type = "tile", so it should call buildTileLayerUrl
@@ -212,7 +209,7 @@ describe("Basic use Layer compoennt with type = 'tile'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -229,7 +226,7 @@ describe("Basic use Layer compoennt with type = 'tile'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -247,7 +244,7 @@ describe("Basic use Layer compoennt with type = 'tile'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -277,7 +274,7 @@ describe("Basic use Layer compoennt with type = 'geojson'", () => {
   it("Basic use", async () => {
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
     await waitFor(() => {
@@ -367,7 +364,7 @@ describe("Basic use Layer compoennt with type = 'geojson'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -396,7 +393,7 @@ describe("Basic use Layer compoennt with type = 'geojson'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -425,7 +422,7 @@ describe("Basic use Layer compoennt with type = 'geojson'", () => {
 
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -461,7 +458,7 @@ describe("One missing param in the layer param", () => {
   it("Basic use", () => {
     render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -500,7 +497,7 @@ describe("One customTooltip in the layer param", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={mockMapContext}>
-          <Layer {...props} />
+          <Layer {...props} map={mockMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -526,7 +523,7 @@ describe("One customTooltip in the layer param", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={mockMapContext}>
-          <Layer {...props} />
+          <Layer {...props} map={mockMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -548,7 +545,7 @@ describe("One customTooltip in the layer param", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={mockMapContext}>
-          <Layer {...props} />
+          <Layer {...props} map={mockMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -585,7 +582,7 @@ describe("Cleanup function to remove layers and sources when the component unmou
   it("functions to remove", () => {
     const { unmount } = render(
       <MapContext.Provider value={mockMapContext}>
-        <Layer {...props} />
+        <Layer {...props} map={mockMapContext.state.maps[0]} />
       </MapContext.Provider>
     );
 
@@ -654,7 +651,6 @@ describe("Layer zone boundaries dark mode colour inversion", () => {
       },
       dispatch: jest.fn(),
     };
-    customMapContext.state.mapsByPane = { main: customMapContext.state.maps[0] };
     api.geodataService.buildTileLayerUrl.mockReturnValue("/test-tiles");
   });
 
@@ -666,7 +662,7 @@ describe("Layer zone boundaries dark mode colour inversion", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -687,7 +683,7 @@ describe("Layer zone boundaries dark mode colour inversion", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -708,7 +704,7 @@ describe("Layer zone boundaries dark mode colour inversion", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -761,7 +757,6 @@ describe("Layer zone boundaries opacity", () => {
       },
       dispatch: jest.fn(),
     };
-    customMapContext.state.mapsByPane = { main: customMapContext.state.maps[0] };
     api.geodataService.buildTileLayerUrl.mockReturnValue("/test-tiles");
   });
 
@@ -774,7 +769,7 @@ describe("Layer zone boundaries opacity", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -796,7 +791,7 @@ describe("Layer zone boundaries opacity", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -820,7 +815,7 @@ describe("Layer zone boundaries opacity", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );
@@ -843,7 +838,7 @@ describe("Layer zone boundaries opacity", () => {
     render(
       <FilterContext.Provider value={mockFilterContext}>
         <MapContext.Provider value={customMapContext}>
-          <Layer {...layerProps} />
+          <Layer {...layerProps} map={customMapContext.state.maps[0]} />
         </MapContext.Provider>
       </FilterContext.Provider>
     );

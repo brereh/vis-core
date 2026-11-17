@@ -1,6 +1,4 @@
 import { useEffect, useContext, useMemo, useRef } from "react";
-import { selectMaps, selectPaneOfMap } from "../../reducers/mapSelectors";
-import { useShallowStableArray } from "hooks/usePaneVisualisation";
 import { api } from "services";
 import {
   appendQueryParams,
@@ -24,8 +22,9 @@ import { addHoverLayers, removeHoverLayers } from "../../map/hoverStyle";
 /**
  * Layer component that adds a layer to the map(s) and handles its lifecycle.
  *
- * This component is responsible for adding a specified layer to one or more map instances
- * and managing its lifecycle, including cleanup when the component is unmounted.
+ * This component is responsible for adding a specified layer to its pane's map and managing
+ * its lifecycle, including cleanup when the component is unmounted. Each map pane renders its
+ * own Layer for each layer it shows.
  * It supports both GeoJSON and tile-based layers and can optionally add hover
  * and select effects to the layers.
  *
@@ -40,14 +39,14 @@ import { addHoverLayers, removeHoverLayers } from "../../map/hoverStyle";
  * @param {string} [props.layer.path] - The path or URL to the layer data.
  * @param {string} [props.layer.source] - The source of the layer data, e.g., "api".
  * @param {string} [props.layer.sourceLayer] - The source layer name for tile layers.
+ * @param {Object} [props.map] - The pane's MapLibre map (nothing is added until it exists).
+ * @param {string} [props.paneId] - The pane's id, for layers with a path per pane.
  */
-export const Layer = ({ layer }) => {
-  // Access the map context to get the current map instance(s)
+export const Layer = ({ layer, map, paneId }) => {
   const { state, dispatch } = useMapContext();
   const { paramNameToUuidMap } = state;
-  // The registered pane maps, kept as the same array while the maps are the same, so effects
-  // keyed on it only re-run when a map changes.
-  const paneMaps = useShallowStableArray(selectMaps(state));
+  // The pane's map, as a list for the effects below (empty until the map exists).
+  const paneMaps = useMemo(() => (map ? [map] : []), [map]);
 
   // Whether the dark base map is currently active
   const currentBaseMap = getBaseMap(state.baseMapId);
@@ -113,17 +112,15 @@ export const Layer = ({ layer }) => {
   const usesPanePaths = Boolean(
     (layer.separatePanePaths || layer.separateSidePaths) && layer.panePaths
   );
-  const pathForMap = (mapInstance) =>
-    usesPanePaths
-      ? layer.panePaths[selectPaneOfMap(state, mapInstance)] ?? layer.path
-      : layer.path;
+  // This pane's path and tile URL.
+  const panePath = usesPanePaths ? layer.panePaths[paneId] ?? layer.path : layer.path;
   // Such a layer's path never changes, so re-add it when its params arrive; null for other layers.
   const panePathsMissingCount = usesPanePaths ? layer.missingParams?.length ?? 0 : null;
-  const tileUrlForMap = (mapInstance) => {
-    if (!usesPanePaths) return computedTileUrl;
-    const path = pathForMap(mapInstance);
-    return layer.source === "api" ? api.geodataService.buildTileLayerUrl(path) : path;
-  };
+  const paneTileUrl = !usesPanePaths
+    ? computedTileUrl
+    : layer.source === "api"
+      ? api.geodataService.buildTileLayerUrl(panePath)
+      : panePath;
 
 
   useEffect(() => {
@@ -199,7 +196,7 @@ export const Layer = ({ layer }) => {
           ...(layer.metadata ?? {}),
           ...layerConfig.metadata,
           isStylable: layer.isStylable ?? false,
-          path: pathForMap(mapInstance) ?? null,
+          path: panePath ?? null,
           legendCacheField: layer.legendCacheField ?? null,
           shouldShowInLegend: layer.shouldShowInLegend ?? (layer.isStylable ? true : false),
           shouldHaveOpacityControl: layer.shouldHaveOpacityControl ?? true, // opacity control should appear by default
@@ -273,7 +270,7 @@ export const Layer = ({ layer }) => {
         // Handle tile layer type
         else if (layer.type === "tile") {
           const url =
-            tileUrlForMap(mapInstance) ||
+            paneTileUrl ||
             (layer.source === "api"
               ? api.geodataService.buildTileLayerUrl(layer.path)
               : layer.path);
@@ -443,7 +440,7 @@ export const Layer = ({ layer }) => {
       const src = mapInstance.getSource(layer.name);
       if (!src) return;
 
-      const tileUrl = tileUrlForMap(mapInstance);
+      const tileUrl = paneTileUrl;
       const lastUrl = lastTilesUrlByMapRef.current.get(mapInstance);
       if (lastUrl === tileUrl) return;
 
@@ -510,7 +507,7 @@ export const Layer = ({ layer }) => {
           ...(layer.metadata ?? {}),
           ...(getLayerStyle(layer.geometryType).metadata || {}),
           isStylable: layer.isStylable ?? false,
-          path: pathForMap(mapInstance) ?? null,
+          path: panePath ?? null,
           shouldShowInLegend: layer.shouldShowInLegend || (layer.isStylable ? true : false),
           shouldHaveOpacityControl: layer.shouldHaveOpacityControl ?? true,
           enforceNoColourSchemeSelector: layer.enforceNoColourSchemeSelector ?? false,

@@ -1,11 +1,9 @@
 /**
  * Creating and tearing down the MapLibre instance behind a map pane.
  *
- * `useMap` (single pane) and `useDualMaps` (two panes) should agree on how a map is built.
- * The `useMap` tests pin the behaviour to keep. The `useDualMaps` tests state that same
- * behaviour for both panes; they were known drift (§2.2(2)–(4) of
- * docs/Map Panes Consolidation Plan.md) until Phase 1 put both hooks on map/mapSetup.js.
- * Phase 3 deletes `useDualMaps`, and the pane tests move onto the single hook.
+ * Every pane builds its map with `useMap`. (Dual pages used a separate `useDualMaps` until
+ * Phase 3 of docs/Map Panes Consolidation Plan.md; its drift, §2.2(2)–(4), was fixed in
+ * Phase 1, and camera sync between panes is now the map group's job: map/mapGroup.test.js.)
  */
 import { renderHook } from "@testing-library/react";
 import { FakeMapConstructor, resetMapLibreFake } from "testing/mapLibreFake";
@@ -21,7 +19,6 @@ jest.mock("services", () => ({
 import Cookies from "js-cookie";
 import { api } from "services";
 import { useMap } from "hooks/useMap";
-import { useDualMaps } from "hooks/useDualMaps";
 
 const API_ORIGIN = "http://localhost:8000";
 const API_TILE_URL = `${API_ORIGIN}/api/vectortiles/zones/1/2/3`;
@@ -65,62 +62,84 @@ describe("useMap (single pane)", () => {
   });
 });
 
-describe("useDualMaps (two panes)", () => {
-  const renderDual = () =>
-    renderHook(() => useDualMaps(containerRef(), containerRef(), undefined, undefined, undefined, ""));
+describe("useMap options", () => {
+  const renderMap = (options) =>
+    renderHook(() => useMap(containerRef(), undefined, undefined, undefined, "TfN", options));
 
-  it("builds one map per pane, each with navigation controls", () => {
-    renderDual();
-    const maps = builtMaps();
-    expect(maps).toHaveLength(2);
-    maps.forEach((map) => {
-      expect(map.inspect().controls.some(({ position }) => position === "bottom-left")).toBe(true);
+  it("shows the full attribution by default and a compact one when asked", () => {
+    renderMap();
+    renderMap({ compactAttribution: true });
+    const [full, compact] = builtMaps().map(
+      (map) => map.inspect().controls.find(({ position }) => position === "bottom-right").control
+    );
+    expect(full.options).toMatchObject({ compact: false });
+    expect(compact.options).toMatchObject({ compact: true });
+    expect(compact.options.customAttribution).toContain("TfN");
+  });
+
+  it("passes the tile cache size to the map", () => {
+    renderMap({ tileCacheSize: 250 });
+    expect(builtMaps()[0].constructorOptions.maxTileCacheSize).toBe(250);
+  });
+
+  it("resizes the map when its container changes size", () => {
+    const observed = [];
+    global.ResizeObserver = class {
+      constructor(callback) {
+        this.callback = callback;
+      }
+      observe(element) {
+        observed.push({ element, callback: this.callback });
+      }
+      disconnect() {}
+    };
+    const ref = containerRef();
+    renderHook(() => useMap(ref, undefined, undefined, undefined, ""));
+    const [map] = builtMaps();
+    const container = observed.find(({ element }) => element === ref.current);
+    expect(container).toBeDefined();
+    map.resize.mockClear();
+    container.callback();
+    expect(map.resize).toHaveBeenCalled();
+  });
+});
+
+/** A container inside the page, as on mobile `useMap` wraps it in a parent element. */
+const attachedContainerRef = () => {
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const container = document.createElement("div");
+  parent.appendChild(container);
+  return { current: container };
+};
+
+describe("useMap touch policy", () => {
+  describe("on a touch-only phone", () => {
+    useMapBrowserEnv({
+      matches: (query) => ["(max-width: 900px)", "(pointer: coarse)", "(any-pointer: coarse)"].includes(query),
+    });
+
+    it("pans with one finger and turns off mouse and keyboard gestures", () => {
+      renderHook(() => useMap(attachedContainerRef(), undefined, undefined, undefined, ""));
+      const [map] = builtMaps();
+      expect(map.dragPan.isEnabled()).toBe(true);
+      expect(map.touchZoomRotate.isRotationEnabled()).toBe(false);
+      expect(map.scrollZoom.isEnabled()).toBe(false);
+      expect(map.doubleClickZoom.isEnabled()).toBe(false);
+      expect(map.keyboard.isEnabled()).toBe(false);
     });
   });
 
-  it("keeps the two panes' cameras together", () => {
-    renderDual();
-    const [left, right] = builtMaps();
-    left.jumpTo({ center: [-1.5, 53.8], zoom: 11 });
-    expect(right.getCenter()).toEqual({ lng: -1.5, lat: 53.8 });
-    expect(right.getZoom()).toBe(11);
-  });
-
-  describe("matches the single pane (fixed drift, plan §2.2(2)–(4))", () => {
-    test("sends the user's token with requests to our API, on both panes", () => {
-      renderDual();
-      expect(builtMaps()).toHaveLength(2);
-      builtMaps().forEach((map) => {
-        expect(requestFor(map)).toEqual({
-          url: API_TILE_URL,
-          headers: { Authorization: "Bearer secret-token" },
-        });
-      });
+  describe("in a narrow desktop window", () => {
+    useMapBrowserEnv({
+      matches: (query) => ["(max-width: 900px)", "(pointer: fine)", "(any-pointer: fine)"].includes(query),
     });
 
-    test("starts both panes from the default base style when the page sets none", () => {
-      renderDual();
-      expect(builtMaps()).toHaveLength(2);
-      builtMaps().forEach((map) => {
-        expect(map.constructorOptions.style).toEqual(defaultMapStyle());
-      });
-    });
-
-    test("removes both maps when the panes unmount", () => {
-      const { unmount } = renderDual();
-      const maps = builtMaps();
-      expect(maps).toHaveLength(2);
-      unmount();
-      maps.forEach((map) => expect(map.inspect().removed).toBe(true));
-    });
-
-    test("stops syncing the panes when they unmount", () => {
-      const { unmount } = renderDual();
-      expect(builtMaps()).toHaveLength(2);
-      const [left, right] = builtMaps();
-      unmount();
-      expect(left.listenerCount("move")).toBe(0);
-      expect(right.listenerCount("move")).toBe(0);
+    it("keeps drag pan and scroll zoom", () => {
+      renderHook(() => useMap(attachedContainerRef(), undefined, undefined, undefined, ""));
+      const [map] = builtMaps();
+      expect(map.dragPan.isEnabled()).toBe(true);
+      expect(map.scrollZoom.isEnabled()).toBe(true);
     });
   });
 });

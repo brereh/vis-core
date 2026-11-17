@@ -1,7 +1,6 @@
 export * from './useDidMountEffect'
 export * from './useMap'
 export * from './useMapContext'
-export * from './useDualMaps'
 export * from './useFilterContext'
 export * from './useLayerFeatureMetadata'
 export * from './useFeatureSelect'
