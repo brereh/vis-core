@@ -38,7 +38,7 @@ config: {
 | `type` | `"map"` | Only `map` cells are drawn for now. Other types leave an empty cell (hidden on mobile). |
 | `column`, `row` | `1` | Where the cell starts (1-based). |
 | `columnSpan`, `rowSpan` | `1` | How many tracks the cell covers. |
-| `title` | none | Names the pane: it labels the pane for screen readers, heads its sidebar filters and heads its legend. |
+| `title` | none | Names the pane: it labels the pane for screen readers, heads its sidebar filters, and heads its legend when the page shows several legends. |
 | `visualisations` | every map visualisation | The page visualisations (`joinDataToMap`, `geojson`) this pane draws. |
 | `layers` | every layer | The page layers this pane shows. |
 | `syncGroup` | `"default"` | Panes in the same group move together and share hover and popups. `null` makes a pane independent. |
@@ -65,7 +65,7 @@ Each filter changes some of the page's panes. It finds them in this order:
 2. **`sides`** (or `side`) on the filter, on side-by-side pages without a grid: `"left"`, `"right"` or `"both"`.
 3. **Legacy name rules**, on side-by-side pages without a grid:
    - "Left" or "Right" in the filter's name targets that pane.
-   - Any other filter on a visualisation with "Side" in its name targets both panes.
+   - Any other filter whose first visualisation has "Side" in its name targets both panes.
 
    In development, each filter that relies on these rules is named in a warning, so it can be given `panes`.
 4. **Otherwise**, the panes that show any of the filter's visualisations, or failing that its `layer`, or failing that every pane.
@@ -74,7 +74,7 @@ Each filter changes some of the page's panes. It finds them in this order:
 { filterName: "Year", paramName: "year", type: "dropdown", visualisations: ["Zones"], panes: ["future"], actions: [...] }
 ```
 
-On a page with a grid, `sides` and the name rules don't apply. Give such filters `panes` (a warning names any that rely on them).
+On a page with a grid, `sides` and the name rules don't apply. Give such filters `panes`. On a `DualMapLayout` page with a grid, a warning names any filter that relies on them.
 
 An action can still name its own target: `sides` on an `UPDATE_DUAL_*` action in the page config wins over the filter's panes.
 
@@ -108,16 +108,17 @@ Nothing has to change: side-by-side configs keep working. To make targeting expl
 | `separateSidePaths: true` on a layer | `separatePanePaths: true` |
 | `UPDATE_DUAL_PATH_PARAMS` / `UPDATE_DUAL_QUERY_PARAMS` | `UPDATE_PATH_PARAMS` / `UPDATE_QUERY_PARAMS` (the `UPDATE_DUAL_*` names remain as aliases) |
 
-To lay a side-by-side page out differently, add `grid` with cells called `left` and `right`, and give every side-specific filter `panes`. On a page with a grid, `sides` and the name rules don't apply, and a warning names any filter that relies on them.
+To lay a side-by-side page out differently, add `grid` with cells called `left` and `right`, and give every side-specific filter `panes`. On a page with a grid, `sides` and the name rules don't apply, and a development warning names any filter that relies on them.
 
 ### Behaviour that changed on side-by-side pages
 
 Side-by-side pages now share the single map's code, so they gain its features. A few behaviours changed:
 
-- **Filters that aren't side-specific.** One sent through `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now changes both maps. Before, only the left map changed.
+- **Filters that aren't side-specific.**
+  - One sent through `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now changes both maps. Before, neither map changed: the update was dropped.
+  - One sent through `UPDATE_DUAL_*` with no `sides`, on a visualisation without "Side" in its name, now changes the panes showing its visualisations. Before, only the left map changed.
 - **Popups and attribution.** Popup options match the single map, and attribution is compact on both maps.
 - **Callout cards.** There is one stack of callout cards instead of two.
 - **Map-click filters.** One with "Left"/"Right" in its name changes only that pane.
-- **Phones.** On touch-only phones, one finger pans each map, and pinch zooms without rotating.
 
 See §4 of `Map Panes Consolidation Plan.md` for the full list, including the changes on single-map pages.

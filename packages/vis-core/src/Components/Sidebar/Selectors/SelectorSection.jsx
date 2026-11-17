@@ -123,7 +123,7 @@ export const SelectorSection = ({ filters, onFilterChange, bgColor, downloadPath
   const { state: filterState, dispatch: filterDispatch } = useFilterContext();
   const { addToast, removeToast } = useToast();
   // Unique per sidebar, so group heading ids never clash.
-  const filterGroupIdPrefix = `filter-group-${useId().replace(/:/g, "")}`;
+  const filterGroupIdPrefix = `filter-group-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
   const [isDownloading, setIsDownloading] = useState(false);
   const [isShapefileDownloading, setIsShapefileDownloading] = useState(false);
   const [requestError, setRequestError] = useState(null);

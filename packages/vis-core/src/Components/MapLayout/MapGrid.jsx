@@ -64,36 +64,42 @@ const cellPlacement = (pane) => ({
  * Moves the map to a feature chosen in a select-and-pan filter and labels the feature for a few
  * seconds. The request names the panes its filter targets (the primary pane if it names none):
  * one target pane per sync group is moved, and the rest of its group follows; the label goes on
- * every target pane and the panes in their groups.
+ * every target pane and the panes in their groups. Panes whose maps are ready move at once; a
+ * target whose map isn't ready yet moves when it is.
  */
 function useFeatureFocus(state, dispatch, grid) {
   const group = useMapGroup();
   const labelTimeoutsRef = useRef({});
   const maps = useShallowStableArray(selectMaps(state));
 
-  // Runs on each new focus request; the registered maps it reads are current at that moment.
+  // The panes already moved and labelled for the current request.
+  const handledRef = useRef({ focus: null, panes: new Set() });
+
+  // Runs on each new focus request and as pane maps become ready: each target pane is handled
+  // once its map is ready, and the request is cleared when every target has been.
   useEffect(() => {
     const focus = state.mapBoundsAndCentroid;
     if (!focus) return;
+    if (handledRef.current.focus !== focus) handledRef.current = { focus, panes: new Set() };
+    const handled = handledRef.current.panes;
+
     const named = (focus.panes ?? []).filter((paneId) => grid.paneIds.includes(paneId));
     const targets = named.length ? named : [grid.primaryPaneId];
-    // Wait until every target pane's map is ready, so none misses the move.
-    if (!targets.every((paneId) => selectPaneMap(state, paneId))) return;
+    const ready = targets.filter((paneId) => !handled.has(paneId) && selectPaneMap(state, paneId));
 
-    const moved = new Set();
     const labelled = new Set();
-    targets.forEach((paneId) => {
+    ready.forEach((paneId) => {
+      if (handled.has(paneId)) return;
       // Only maps registered as ready: a label can't be added before a map's style loads.
       const groupPanes = Object.keys(group.mapsInGroupOf(paneId)).filter((id) => selectPaneMap(state, id));
       const panesInGroup = groupPanes.length ? groupPanes : [paneId];
-      if (!moved.has(paneId)) {
-        focusFeature(selectPaneMap(state, paneId), focus);
-        panesInGroup.forEach((id) => moved.add(id));
-        moved.add(paneId);
-      }
-      if (focus.featureName && focus.centroid) {
-        panesInGroup.forEach((id) => labelled.add(id));
-      }
+      focusFeature(selectPaneMap(state, paneId), focus);
+      // The rest of the group follows the move, so other targets in it are handled too.
+      panesInGroup.forEach((id) => {
+        if (targets.includes(id)) handled.add(id);
+      });
+      handled.add(paneId);
+      if (focus.featureName && focus.centroid) panesInGroup.forEach((id) => labelled.add(id));
     });
 
     labelled.forEach((paneId) => {
@@ -104,7 +110,9 @@ function useFeatureFocus(state, dispatch, grid) {
         timeoutRef: labelTimeoutsRef.current[paneId],
       });
     });
-    dispatch({ type: actionTypes.CLEAR_BOUNDS_AND_CENTROID });
+    if (targets.every((paneId) => handled.has(paneId))) {
+      dispatch({ type: actionTypes.CLEAR_BOUNDS_AND_CENTROID });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maps, state.mapBoundsAndCentroid, dispatch, group, grid]);
 }

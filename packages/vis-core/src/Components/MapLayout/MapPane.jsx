@@ -483,9 +483,10 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
       Object.values(popupsRef.current).forEach((popups) => popups.forEach((popup) => popup.remove()));
       popupsRef.current = {};
     };
-    // Visualisations too: a layer-click popup shows the value at the time of the click, so it
-    // closes when the data changes.
-  }, [map, group, paneId, paneLayers, state.visualisations]);
+    // Visualisations and pane data too: a layer-click popup shows the value at the time of the
+    // click, so it closes when any pane's data (or the page's visualisations) changes, as it did
+    // when every data update rewrote the page copy.
+  }, [map, group, paneId, paneLayers, state.visualisations, state.paneData]);
 
   // --- page-wide duties of the primary pane ----------------------------------------------------
 

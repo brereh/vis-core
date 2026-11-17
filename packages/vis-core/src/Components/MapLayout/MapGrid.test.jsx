@@ -367,8 +367,20 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
       maps[paneIds[0]].fire("click", { point: POINT, lngLat: LNG_LAT });
       expect(FakePopup.open()).toHaveLength(paneIds.length);
 
-      rerenderWith({ visualisations: { Vis: { type: "joinDataToMap", data: [{ id: 7, value: 2 }] } } });
+      // As the reducer stores a fetch: in the fetching pane's data, with visualisations untouched.
+      rerenderWith({ paneData: { [paneIds.at(-1)]: { Vis: [{ id: 7, value: 2 }] } } });
 
+      expect(FakePopup.open()).toEqual([]);
+    });
+
+    it("close when the page's visualisations change", () => {
+      const { maps, rerenderWith } = renderGrid({
+        type,
+        layers: { [ZONES]: { name: ZONES, shouldHaveTooltipOnClick: true } },
+        mapFor: (id) => paneMap(id, [zone(7, 1)]),
+      });
+      maps[paneIds[0]].fire("click", { point: POINT, lngLat: LNG_LAT });
+      rerenderWith({ visualisations: { Vis: { type: "joinDataToMap" } } });
       expect(FakePopup.open()).toEqual([]);
     });
   });
@@ -648,20 +660,21 @@ describe("a configured grid", () => {
       expect(labelOn(maps.future)).toBe("Leeds");
     });
 
-    it("waits until every target pane's map is ready", () => {
-      const { maps, dispatch, rerenderWith } = renderGrid({ gridConfig: dashboard, state: focus(["overview", "future"]) });
-      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
-      dispatch.mockClear();
-      maps.overview.fitBounds.mockClear();
-
+    it("moves ready target panes at once, and others when their maps are ready", () => {
+      const request = focus(["overview", "future"]);
+      const { maps, dispatch, rerenderWith } = renderGrid({ gridConfig: dashboard });
       const { future, ...readyMaps } = maps;
-      rerenderWith({ mapsByPane: readyMaps, mapBoundsAndCentroid: { ...focus(["overview", "future"]).mapBoundsAndCentroid } });
-      expect(maps.overview.fitBounds).not.toHaveBeenCalled();
+
+      rerenderWith({ mapsByPane: readyMaps, ...request });
+      expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
+      expect(future.fitBounds).not.toHaveBeenCalled();
       expect(dispatched(dispatch, "CLEAR_BOUNDS_AND_CENTROID")).toHaveLength(0);
 
-      rerenderWith({ mapsByPane: maps });
+      rerenderWith({ mapsByPane: maps, ...request });
       expect(maps.overview.fitBounds).toHaveBeenCalledTimes(1);
-      expect(future.fitBounds).toHaveBeenCalledTimes(2);
+      expect(future.fitBounds).toHaveBeenCalledTimes(1);
+      expect(future.getSource("feature-label-source").data.properties.name).toBe("Leeds");
+      expect(dispatched(dispatch, "CLEAR_BOUNDS_AND_CENTROID")).toHaveLength(1);
     });
 
     it("moves the primary pane when the request names no pane", () => {

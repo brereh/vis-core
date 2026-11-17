@@ -56,8 +56,9 @@ export const selectPaneData = (state, paneId, visualisationName) =>
 /**
  * Everything one pane shows for a visualisation: its params (see `selectPaneVisualisation`)
  * and its own data rather than all panes' data together. Where several panes show the
- * visualisation, a pane with no data stored yet has none (not another pane's). Returns the
- * page's copy itself when neither differs, as on a single-map page.
+ * visualisation, a pane with no data stored yet has none (not another pane's); where only it
+ * does, data stored without a pane on the page copy still applies. Returns a new object when
+ * the pane has data, so callers memoise on the state they read.
  *
  * @param {Object} state
  * @param {string} paneId
