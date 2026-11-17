@@ -315,7 +315,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 - one card stack instead of two
 - a filter that isn't side-specific and uses `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now affects both maps (it was silently dropped before, see §2.2(5))
 - which pane a filter targets is worked out once and used everywhere, so the same filter targets the same pane at load and afterwards (the Phase 2 result lists exactly what changes)
-- legend data comes from the classification group rather than the side with data
+- legend data comes from the classification group rather than the side with data (deferred to Phase 4 with `PageLegend`; until then dual pages keep the side-with-data rule)
 
 **Single pages:**
 - clicking an empty area keeps the current map-filter highlight, so the highlight matches the filter value that is still applied (today it clears the highlight but keeps the value)
@@ -326,7 +326,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 **Both:**
 - `state.map` and the other map state are cleared when the page changes
 
-**Pre-merge check (Phase 3):** run BaseApp's dual-map pages against each change, together with the downstream app configs the maintainers have to hand. In particular, find dual-page configs that:
+**Pre-merge check (before this work goes into `dev`):** run BaseApp's dual-map pages against each change, together with the downstream app configs the maintainers have to hand. In particular, find dual-page configs that:
 - send a filter through `UPDATE_*_PARAMS`, side-specific or not
 - send a filter whose visualisation name lacks "Side" through `UPDATE_DUAL_*`
 - name a filter with "Left"/"Right" on a visualisation without "Side" in its name
@@ -483,7 +483,7 @@ Behaviour pinned so later phases keep it:
 
 *Exit:* `Map.test` and `DualMaps.test` are re-expressed against `MapPane`, parameterised over the 1×1 and 1×2 presets. Fixes 7–10 are flipped. BaseApp's dual pages are checked by hand on desktop and mobile (the §4 pre-merge check).
 
-**Phase 3 result.** Full suite: 120 suites and 1019 tests, all passing, and no known-drift tests remain.
+**Phase 3 result.** Full suite: 120 suites and 1030 tests, all passing, and no known-drift tests remain.
 
 **What replaced what:**
 
@@ -502,21 +502,24 @@ Behaviour pinned so later phases keep it:
 - **`MapLayout`** renders `MapGrid` for both page types, and leaves only map-click filters that target several panes to the panes.
 - **Tests:**
   - `MapGrid.test.jsx` runs each behaviour of the former `Map.test` and `DualMaps.test` on both presets.
-  - The probe-based tests changed only their probes (and files named after deleted components were renamed: `SideBySide.panes`, `MapPane.touch`, `MapPane.registration`).
+  - The probe-based tests changed their probes, plus small fixture additions the grid needs (each fixture's grid now lists its layers, and the side-by-side fixture registers its maps). Their assertions didn't change. Files named after deleted components were renamed: `SideBySide.panes`, `MapPane.touch`, `MapPane.registration`.
+  - `MapGrid.test.jsx` records what each pane renders: `Layer` and `SpiderLayer` get the pane's map only once it has loaded, `MapVisualisation` gets the pane's map and id for map visualisations only, and the legend waits for a ready map.
   - New unit tests cover the map group, map-click filters and the touch policy.
 
 **Behaviour changes on dual pages.** These are the intended ones from §4:
 - Everything the single map does is now available: spider layers, tap tooltips (the tapped feature on the tapped pane, the feature at that location on the other), the hover fallback on touch devices that hover, viewport filters, the draw control (on the left pane), the temporary feature label (on both panes), `visualisedFeatureIds` filtering, zoom tracking (from the left pane) and the mobile attribution bar.
 - Leaving a map clears both panes' tooltips (§2.2(11)).
 - Each pane sets up its layers once (§2.2(7)), and the card stack is drawn once (§2.2(8)).
-- Layer-click popups use the single map's options (`closeOnClick: false`) and are skipped on touch devices, where the tap tooltip stands in.
+- Layer-click popups use the single map's options (`closeOnClick: false`), close when the data changes (as on the single map, so they never show a stale value), and are skipped on touch devices, where the tap tooltip stands in.
 - Compact attribution on both maps (before, the right map only).
 
 Map-click filters also change on dual pages:
 - They respect `filter.panes`: a filter named "Left …" changes only the left pane (before, both).
 - Each pane looks up its feature at the click's location projected onto its own map (before, the same screen point on both maps).
 - The action's configured payload is passed on (before, it was dropped on dual pages).
-- When several map-click filters' layers are under the click, the top-most feature decides, as on the single map.
+- When several map-click filters' layers are under the click, the top-most feature decides, and of several filters on one layer only the first applies, as on the single map. (Before, dual pages applied every map-click filter.)
+- A map-click filter targeting one pane (say "Left …") is also re-sent by `MapLayout` when its value changes, as on single pages, and its initial value is sent at load.
+- On touch devices a tap runs the map-click filter from both `touchend` and the map's `click`, as single pages already did; the second run repeats the same values.
 
 **Behaviour changes on single-map pages:**
 - Clicking where there is no feature keeps the map-click selection (§4).
@@ -531,10 +534,16 @@ Map-click filters also change on dual pages:
 
 **Not yet:**
 - grid configs other than the presets, independent panes and own classification (Phase 4)
+- `PageLegend`, with a legend section per classification group (Phase 4); for now the legend keeps the old rule
 - `state.drawPaneId` (Phase 5)
+- the manual check of BaseApp's dual pages on desktop and mobile: this environment has no running app with real configs and data, so it stays in the §4 pre-merge check before this work goes into `dev`
+
+**Pulled forward from Phase 4:** per-pane tile-cache sizing and the mobile one-column layout with a gap.
+
+**Also:** the draw control is now removed again when its pane's map goes (it never was before).
 
 ### Phase 4: Grid config and layout
-- `config.grid`: placement, spans, relative sizes, validation, sync groups other than `"default"` and `null`, `classification: "own"` (own bins and its own legend section), the pane cap warning and tile-cache sizing, the mobile one-column layout, and the `webglcontextlost` message.
+- `config.grid`: placement, spans, relative sizes, validation, sync groups other than `"default"` and `null`, `classification: "own"` (own bins and its own legend section), `PageLegend` (a legend section per classification group), the pane cap warning, and the `webglcontextlost` message. (Tile-cache sizing and the mobile one-column layout shipped in Phase 3.)
 
 *Exit:* `resolveMapGrid` tests, plus `MapGrid` tests for a 2×2 grid, a spanning cell, an independent pane and an opted-out pane.
 

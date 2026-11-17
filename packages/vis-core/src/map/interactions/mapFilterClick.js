@@ -14,7 +14,7 @@ import { highlightSelectedFeature } from "./selectionHighlight";
  * - Each filter targets its own panes that are in the clicked pane's sync group.
  * - If the clicked pane's top-most feature on any filter layer belongs to another filter's
  *   layer, a filter targeting the clicked pane is skipped: the feature on top decides, as on
- *   a single map.
+ *   a single map. Of several filters on the same layer, only the first applies.
  * - If no target pane has a feature of the filter's layer there, nothing changes (selections
  *   stay, matching the filter value that is still applied).
  * - Otherwise, each target pane with a feature selects it and dispatches its value; each target
@@ -65,7 +65,9 @@ export function applyMapFilterClick({
     : undefined;
 
   let changed = false;
+  const handledLayers = new Set();
   mapFilters.forEach((filter) => {
+    if (handledLayers.has(filter.layer)) return;
     const filterPanes = filter.panes ?? groupPaneIds;
     const targets = groupPaneIds.filter((id) => filterPanes.includes(id));
     if (targets.length === 0) return;
@@ -73,6 +75,7 @@ export function applyMapFilterClick({
 
     const featureByPane = Object.fromEntries(targets.map((id) => [id, featureAt(id, filter.layer)]));
     if (targets.every((id) => !featureByPane[id])) return;
+    handledLayers.add(filter.layer);
 
     const valueByPane = {};
     targets.forEach((paneId) => {

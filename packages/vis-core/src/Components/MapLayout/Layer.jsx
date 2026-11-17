@@ -112,14 +112,15 @@ export const Layer = ({ layer, map, paneId }) => {
   const usesPanePaths = Boolean(
     (layer.separatePanePaths || layer.separateSidePaths) && layer.panePaths
   );
-  const pathForMap = () => (usesPanePaths ? layer.panePaths[paneId] ?? layer.path : layer.path);
+  // This pane's path and tile URL.
+  const panePath = usesPanePaths ? layer.panePaths[paneId] ?? layer.path : layer.path;
   // Such a layer's path never changes, so re-add it when its params arrive; null for other layers.
   const panePathsMissingCount = usesPanePaths ? layer.missingParams?.length ?? 0 : null;
-  const tileUrlForMap = (mapInstance) => {
-    if (!usesPanePaths) return computedTileUrl;
-    const path = pathForMap();
-    return layer.source === "api" ? api.geodataService.buildTileLayerUrl(path) : path;
-  };
+  const paneTileUrl = !usesPanePaths
+    ? computedTileUrl
+    : layer.source === "api"
+      ? api.geodataService.buildTileLayerUrl(panePath)
+      : panePath;
 
 
   useEffect(() => {
@@ -195,7 +196,7 @@ export const Layer = ({ layer, map, paneId }) => {
           ...(layer.metadata ?? {}),
           ...layerConfig.metadata,
           isStylable: layer.isStylable ?? false,
-          path: pathForMap() ?? null,
+          path: panePath ?? null,
           legendCacheField: layer.legendCacheField ?? null,
           shouldShowInLegend: layer.shouldShowInLegend ?? (layer.isStylable ? true : false),
           shouldHaveOpacityControl: layer.shouldHaveOpacityControl ?? true, // opacity control should appear by default
@@ -269,7 +270,7 @@ export const Layer = ({ layer, map, paneId }) => {
         // Handle tile layer type
         else if (layer.type === "tile") {
           const url =
-            tileUrlForMap(mapInstance) ||
+            paneTileUrl ||
             (layer.source === "api"
               ? api.geodataService.buildTileLayerUrl(layer.path)
               : layer.path);
@@ -439,7 +440,7 @@ export const Layer = ({ layer, map, paneId }) => {
       const src = mapInstance.getSource(layer.name);
       if (!src) return;
 
-      const tileUrl = tileUrlForMap(mapInstance);
+      const tileUrl = paneTileUrl;
       const lastUrl = lastTilesUrlByMapRef.current.get(mapInstance);
       if (lastUrl === tileUrl) return;
 
@@ -506,7 +507,7 @@ export const Layer = ({ layer, map, paneId }) => {
           ...(layer.metadata ?? {}),
           ...(getLayerStyle(layer.geometryType).metadata || {}),
           isStylable: layer.isStylable ?? false,
-          path: pathForMap() ?? null,
+          path: panePath ?? null,
           shouldShowInLegend: layer.shouldShowInLegend || (layer.isStylable ? true : false),
           shouldHaveOpacityControl: layer.shouldHaveOpacityControl ?? true,
           enforceNoColourSchemeSelector: layer.enforceNoColourSchemeSelector ?? false,

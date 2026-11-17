@@ -27,9 +27,10 @@ jest.mock("@mapbox/mapbox-gl-draw", () => {
   return { __esModule: true, default: MapboxDraw };
 });
 jest.mock("@ookla/mapbox-gl-draw-rectangle", () => ({ RectangleMode: {} }));
-jest.mock("./Layer", () => ({ Layer: () => null }));
-jest.mock("./SpiderLayer", () => ({ SpiderLayer: () => null }));
-jest.mock("./MapVisualisation", () => ({ MapVisualisation: () => null }));
+// Stand-ins that record what each pane renders (they draw nothing).
+jest.mock("./Layer", () => ({ Layer: jest.fn(() => null) }));
+jest.mock("./SpiderLayer", () => ({ SpiderLayer: jest.fn(() => null) }));
+jest.mock("./MapVisualisation", () => ({ MapVisualisation: jest.fn(() => null) }));
 jest.mock("./CalloutCards/BaseCalloutCardVisualisation", () => ({ BaseCalloutCardVisualisation: () => null }));
 jest.mock("Components/ScrollableContainer", () => ({
   ScrollableContainer: ({ children }) => <div data-testid="callout-card-stack">{children}</div>,
@@ -44,7 +45,17 @@ jest.mock("./MapStyleToggle", () => ({
 
 import { useMap } from "hooks/useMap";
 import { useBaseMapTransition } from "hooks/useBaseMapTransition";
+import { Layer } from "./Layer";
+import { SpiderLayer } from "./SpiderLayer";
+import { MapVisualisation } from "./MapVisualisation";
 import MapGrid from "./MapGrid";
+
+/** The latest props each stand-in was rendered with, by a key. */
+const latestProps = (component, keyOf) => {
+  const byKey = new Map();
+  component.mock.calls.forEach(([props]) => byKey.set(keyOf(props), props));
+  return byKey;
+};
 
 const LNG_LAT = { lng: -1.55, lat: 53.8 };
 const POINT = { x: 10, y: 20 };
@@ -71,6 +82,7 @@ const paneMap = (name, features = []) => {
  */
 const renderGrid = ({
   type = "MapLayout",
+  ready = true,
   layers = { [ZONES]: { name: ZONES, shouldHaveTooltipOnHover: true } },
   visualisations = {},
   filters = [],
@@ -88,9 +100,11 @@ const renderGrid = ({
   const maps = Object.fromEntries(grid.paneIds.map((paneId) => [paneId, mapFor(paneId)]));
   const queue = grid.paneIds.map((paneId) => maps[paneId]);
   const mapByContainer = new WeakMap();
+  const readiness = { ready };
   useMap.mockImplementation((containerRef) => {
     if (!mapByContainer.has(containerRef)) mapByContainer.set(containerRef, queue.shift());
-    return { map: mapByContainer.get(containerRef), isMapReady: true, isMapLoaded: true, isMapStyleLoaded: true };
+    const isReady = readiness.ready;
+    return { map: mapByContainer.get(containerRef), isMapReady: isReady, isMapLoaded: isReady, isMapStyleLoaded: isReady };
   });
 
   const state = {
@@ -99,8 +113,9 @@ const renderGrid = ({
     mapZoom: 9,
     baseMapId: undefined,
     mapGrid: grid,
-    mapsByPane: maps,
-    map: maps[grid.primaryPaneId],
+    // Panes register their maps once ready.
+    mapsByPane: ready ? maps : {},
+    map: ready ? maps[grid.primaryPaneId] : null,
     layers,
     visualisations,
     filters,
@@ -130,6 +145,11 @@ const renderGrid = ({
     dispatch,
     filterDispatch,
     rerenderWith: (changes) => view.rerender(tree({ ...state, ...changes })),
+    /** Lets the maps finish loading, as their panes would register them. */
+    becomeReady: () => {
+      readiness.ready = true;
+      view.rerender(tree({ ...state, mapsByPane: maps, map: maps[grid.primaryPaneId] }));
+    },
   };
 };
 
@@ -164,9 +184,56 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
 
   it("applies base-map changes to every pane's map", () => {
     const { maps, state } = renderGrid({ type });
-    const { maps: transitionMaps, applicationLayers } = useBaseMapTransition.mock.calls.at(-1)[0];
+    const { maps: transitionMaps, applicationLayers, descriptor } = useBaseMapTransition.mock.calls.at(-1)[0];
     expect(transitionMaps).toEqual(paneIds.map((id) => maps[id]));
     expect(applicationLayers).toBe(state.layers);
+    expect(descriptor).toEqual(expect.objectContaining({ id: expect.any(String) }));
+  });
+
+  describe("what each pane draws", () => {
+    const layers = {
+      [ZONES]: { name: ZONES, type: "tile", geometryType: "polygon" },
+      stations: { name: "stations", type: "tile", geometryType: "point", spiderfyOverlappingPoints: true },
+    };
+    const visualisations = {
+      Accessibility: { type: "joinDataToMap" },
+      Flows: { type: "geojson" },
+      Summary: { type: "calloutCard" },
+    };
+
+    it("renders each layer, spider layer and map visualisation on every pane, with that pane's map", () => {
+      const { maps } = renderGrid({ type, layers, visualisations });
+      const layerProps = latestProps(Layer, (p) => `${p.paneId}:${p.layer.name}`);
+      const spiderProps = latestProps(SpiderLayer, (p) => `${p.map?.name}:${p.baseLayerId}`);
+      const visProps = latestProps(MapVisualisation, (p) => `${p.paneId}:${p.visualisationName}`);
+
+      paneIds.forEach((id) => {
+        [ZONES, "stations"].forEach((name) => expect(layerProps.get(`${id}:${name}`).map).toBe(maps[id]));
+        expect(spiderProps.get(`${id}:stations`)).toBeDefined();
+        expect(visProps.get(`${id}:Accessibility`).map).toBe(maps[id]);
+        expect(visProps.get(`${id}:Flows`).map).toBe(maps[id]);
+        expect(visProps.has(`${id}:Summary`)).toBe(false);
+      });
+      expect(spiderProps.size).toBe(paneIds.length);
+    });
+
+    it("gives layers no map until it has loaded, then the pane's map", () => {
+      const { maps, becomeReady } = renderGrid({ type, layers, visualisations, ready: false });
+      Layer.mock.calls.forEach(([props]) => expect(props.map).toBeNull());
+      SpiderLayer.mock.calls.forEach(([props]) => expect(props.map).toBeNull());
+      expect(screen.queryByTestId("legend")).not.toBeInTheDocument();
+
+      Layer.mockClear();
+      becomeReady();
+      const layerProps = latestProps(Layer, (p) => `${p.paneId}:${p.layer.name}`);
+      paneIds.forEach((id) => expect(layerProps.get(`${id}:${ZONES}`).map).toBe(maps[id]));
+      expect(screen.getByTestId("legend")).toBeInTheDocument();
+    });
+
+    it("draws no card stack without visualisations", () => {
+      renderGrid({ type, state: { visualisations: undefined } });
+      expect(screen.queryByTestId("callout-card-stack")).not.toBeInTheDocument();
+    });
   });
 
   it("puts the draw control for feature selection on the primary pane only", () => {
@@ -275,6 +342,20 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
         expect(popupOn(maps[id]).options).toMatchObject({ closeOnClick: false });
       });
     });
+
+    it("close when the data changes, so they never show a stale value", () => {
+      const { maps, rerenderWith } = renderGrid({
+        type,
+        layers: { [ZONES]: { name: ZONES, shouldHaveTooltipOnClick: true } },
+        mapFor: (id) => paneMap(id, [zone(7, 1)]),
+      });
+      maps[paneIds[0]].fire("click", { point: POINT, lngLat: LNG_LAT });
+      expect(FakePopup.open()).toHaveLength(paneIds.length);
+
+      rerenderWith({ visualisations: { Vis: { type: "joinDataToMap", data: [{ id: 7, value: 2 }] } } });
+
+      expect(FakePopup.open()).toEqual([]);
+    });
   });
 
   describe("labels", () => {
@@ -299,6 +380,16 @@ describe.each(PRESETS)("on %s", (_, type, paneIds) => {
       paneIds.forEach((id) => {
         expect(maps[id].getFilter(ZONES)).toEqual(["in", ["get", "id"], ["literal", [3, 5]]]);
       });
+    });
+
+    it("leave a layer's filter alone when other layer state changes", () => {
+      const { maps, rerenderWith, state } = renderGrid({ type });
+      const ownFilter = ["!=", ["feature-state", "value"], null];
+      paneIds.forEach((id) => maps[id].setFilter(ZONES, ownFilter));
+
+      rerenderWith({ layers: { [ZONES]: { ...state.layers[ZONES], class_method: "q" } } });
+
+      paneIds.forEach((id) => expect(maps[id].getFilter(ZONES)).toBe(ownFilter));
     });
   });
 

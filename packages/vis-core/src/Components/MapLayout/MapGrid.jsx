@@ -78,8 +78,14 @@ function useFeatureFocus(state, dispatch, primaryPaneId) {
     if (!primaryMap || !focus) return;
     focusFeature(primaryMap, focus);
     if (focus.featureName && focus.centroid) {
-      const maps = group.mapsInGroupOf(primaryPaneId);
-      Object.entries(Object.keys(maps).length ? maps : { [primaryPaneId]: primaryMap }).forEach(
+      // Only maps registered as ready: a label can't be added before a map's style loads.
+      const registered = Object.keys(group.mapsInGroupOf(primaryPaneId)).filter((paneId) =>
+        selectPaneMap(state, paneId)
+      );
+      const maps = Object.fromEntries(
+        (registered.length ? registered : [primaryPaneId]).map((paneId) => [paneId, selectPaneMap(state, paneId)])
+      );
+      Object.entries(maps).forEach(
         ([paneId, map]) => {
           labelTimeoutsRef.current[paneId] ??= { current: null };
           showFeatureLabel(map, {

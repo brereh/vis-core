@@ -102,6 +102,13 @@ describe("applyMapFilterClick on a single map", () => {
     expect(filterDispatch.mock.calls.map(([a]) => a.payload.filterId)).toEqual(["link"]);
   });
 
+  it("applies only the first of several filters on the clicked layer", () => {
+    const map = mapWith("main", [zone(7)]);
+    const second = zoneFilter({ id: "zone-again" });
+    click({ main: map }, [zoneFilter(), second]);
+    expect(filterDispatch.mock.calls.map(([a]) => a.payload.filterId)).toEqual(["zone"]);
+  });
+
   it("ignores filters whose layer isn't on the map", () => {
     const map = mapWith("main", [zone(7)], []);
     expect(click({ main: map }, [zoneFilter()])).toBe(false);

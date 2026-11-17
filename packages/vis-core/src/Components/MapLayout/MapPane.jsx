@@ -110,6 +110,9 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
     { compactAttribution, tileCacheSize }
   );
 
+  // Layers can only be added once the map's style has loaded; until then they get no map.
+  const readyMap = isMapReady ? map : null;
+
   const hoverSessionRef = useRef(createHoverSession());
   const popupsRef = useRef({});
   const lastTouchTimeRef = useRef(0);
@@ -451,7 +454,9 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
       Object.values(popupsRef.current).forEach((popups) => popups.forEach((popup) => popup.remove()));
       popupsRef.current = {};
     };
-  }, [map, group, paneId, paneLayers]);
+    // Visualisations too: a layer-click popup shows the value at the time of the click, so it
+    // closes when the data changes.
+  }, [map, group, paneId, paneLayers, state.visualisations]);
 
   // --- page-wide duties of the primary pane ----------------------------------------------------
 
@@ -466,6 +471,13 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
     });
     map.addControl(drawInstance);
     dispatch({ type: "SET_DRAW_INSTANCE", payload: drawInstance });
+    return () => {
+      try {
+        map.removeControl(drawInstance);
+      } catch {
+        // The map may already be gone.
+      }
+    };
   }, [map, isPrimary, dispatch]);
 
   // Keep `state.currentZoom` in step with the primary pane's zoom, for zoom-gated UI such as
@@ -584,10 +596,14 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
 
   // --- feature filtering ---------------------------------------------------------------------
 
-  // Show only the listed features of layers with visualised feature ids.
+  // Show only the listed features of layers with visualised feature ids. Runs when the ids
+  // change, not when other layer state does: resetting a layer's filter would wipe filters
+  // others set (hiding features without data, spider exclusions).
+  const paneLayersRef = useRef(paneLayers);
+  paneLayersRef.current = paneLayers;
   useEffect(() => {
     if (!map) return;
-    paneLayers.forEach(({ name: layerId }) => {
+    paneLayersRef.current.forEach(({ name: layerId }) => {
       if (!map.getLayer(layerId)) return;
       const featureIds = state.visualisedFeatureIds?.[layerId];
       map.setFilter(
@@ -597,16 +613,16 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
           : null
       );
     });
-  }, [map, paneLayers, state.visualisedFeatureIds]);
+  }, [map, state.visualisedFeatureIds]);
 
   return (
     <PaneContainer ref={containerRef} data-pane-id={paneId}>
       {paneLayers.map((layer, index) => (
         <React.Fragment key={layer.name || layer.id || index}>
-          <Layer layer={layer} map={map} paneId={paneId} />
+          <Layer layer={layer} map={readyMap} paneId={paneId} />
           {/* A sibling 'spider' layer spreads out overlapping points of point layers. */}
           {layer.type === "tile" && layer.geometryType === "point" && Boolean(layer.spiderfyOverlappingPoints) && (
-            <SpiderLayer baseLayerId={layer.name || layer.id} map={map} />
+            <SpiderLayer baseLayerId={layer.name || layer.id} map={readyMap} />
           )}
         </React.Fragment>
       ))}
