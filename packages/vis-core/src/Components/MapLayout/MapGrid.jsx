@@ -44,6 +44,8 @@ const GridCell = styled.div`
 
   @media ${(props) => props.theme.mq.mobile} {
     width: 100%;
+    /* A cell with nothing to show takes no space (or gap) in the stack. */
+    ${({ $empty }) => ($empty ? "display: none;" : "")}
   }
 `;
 
@@ -59,40 +61,52 @@ const cellPlacement = (pane) => ({
 });
 
 /**
- * Moves the primary pane to a feature chosen in a select-and-pan filter (its sync group
- * follows) and labels the feature on every map in that group for a few seconds.
+ * Moves the map to a feature chosen in a select-and-pan filter and labels the feature for a few
+ * seconds. The request names the panes its filter targets (the primary pane if it names none):
+ * one target pane per sync group is moved, and the rest of its group follows; the label goes on
+ * every target pane and the panes in their groups.
  */
-function useFeatureFocus(state, dispatch, primaryPaneId) {
+function useFeatureFocus(state, dispatch, grid) {
   const group = useMapGroup();
   const labelTimeoutsRef = useRef({});
-  const primaryMap = selectPaneMap(state, primaryPaneId);
+  const maps = useShallowStableArray(selectMaps(state));
 
   // Runs on each new focus request; the registered maps it reads are current at that moment.
   useEffect(() => {
     const focus = state.mapBoundsAndCentroid;
-    if (!primaryMap || !focus) return;
-    focusFeature(primaryMap, focus);
-    if (focus.featureName && focus.centroid) {
+    if (!focus) return;
+    const named = (focus.panes ?? []).filter((paneId) => grid.paneIds.includes(paneId));
+    const targets = (named.length ? named : [grid.primaryPaneId]).filter((paneId) => selectPaneMap(state, paneId));
+    // Wait until a target pane's map is ready.
+    if (targets.length === 0) return;
+
+    const moved = new Set();
+    const labelled = new Set();
+    targets.forEach((paneId) => {
       // Only maps registered as ready: a label can't be added before a map's style loads.
-      const registered = Object.keys(group.mapsInGroupOf(primaryPaneId)).filter((paneId) =>
-        selectPaneMap(state, paneId)
-      );
-      const maps = Object.fromEntries(
-        (registered.length ? registered : [primaryPaneId]).map((paneId) => [paneId, selectPaneMap(state, paneId)])
-      );
-      Object.entries(maps).forEach(
-        ([paneId, map]) => {
-          labelTimeoutsRef.current[paneId] ??= { current: null };
-          showFeatureLabel(map, {
-            featureName: focus.featureName,
-            centroid: focus.centroid,
-            timeoutRef: labelTimeoutsRef.current[paneId],
-          });
-        }
-      );
-    }
+      const groupPanes = Object.keys(group.mapsInGroupOf(paneId)).filter((id) => selectPaneMap(state, id));
+      const panesInGroup = groupPanes.length ? groupPanes : [paneId];
+      if (!moved.has(paneId)) {
+        focusFeature(selectPaneMap(state, paneId), focus);
+        panesInGroup.forEach((id) => moved.add(id));
+        moved.add(paneId);
+      }
+      if (focus.featureName && focus.centroid) {
+        panesInGroup.forEach((id) => labelled.add(id));
+      }
+    });
+
+    labelled.forEach((paneId) => {
+      labelTimeoutsRef.current[paneId] ??= { current: null };
+      showFeatureLabel(selectPaneMap(state, paneId), {
+        featureName: focus.featureName,
+        centroid: focus.centroid,
+        timeoutRef: labelTimeoutsRef.current[paneId],
+      });
+    });
     dispatch({ type: actionTypes.CLEAR_BOUNDS_AND_CENTROID });
-  }, [primaryMap, state.mapBoundsAndCentroid, dispatch, group, primaryPaneId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maps, state.mapBoundsAndCentroid, dispatch, group, grid]);
 }
 
 function MapGridContent({ extraCopyrightText, sidebarIsOpen, showMapStyleToggle }) {
@@ -108,7 +122,7 @@ function MapGridContent({ extraCopyrightText, sidebarIsOpen, showMapStyleToggle 
     applicationLayers: state.layers,
   });
 
-  useFeatureFocus(state, dispatch, grid.primaryPaneId);
+  useFeatureFocus(state, dispatch, grid);
 
   const tileCacheSize = Math.min(MAX_TILE_CACHE_PER_PANE, Math.round(TOTAL_TILE_CACHE / Math.max(2, paneCount)));
   const primaryMap = selectPaneMap(state, grid.primaryPaneId);
@@ -120,7 +134,7 @@ function MapGridContent({ extraCopyrightText, sidebarIsOpen, showMapStyleToggle 
       {(grid.cells ?? grid.panes).map((cell) => {
         const CellComponent = CELL_COMPONENTS[cell.type ?? "map"];
         return (
-          <GridCell key={cell.id} style={cellPlacement(cell)} data-cell-id={cell.id}>
+          <GridCell key={cell.id} style={cellPlacement(cell)} data-cell-id={cell.id} $empty={!CellComponent}>
             {CellComponent && (
               <CellComponent
                 pane={cell}

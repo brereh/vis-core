@@ -1,4 +1,4 @@
-import { resolveFilterPanes } from "./resolveFilterPanes";
+import { drawPaneWarnings, legacyTargetingWarnings, resolveFilterPanes } from "./resolveFilterPanes";
 import { resolveMapGrid } from "./resolveMapGrid";
 
 const config = {
@@ -127,5 +127,62 @@ describe("resolveFilterPanes", () => {
       expect(resolve({ visualisations: ["Summary"] }, uneven).panes).toEqual(["left", "right"]);
       expect(resolve({}, uneven).panes).toEqual(["left", "right"]);
     });
+  });
+});
+
+describe("legacyTargetingWarnings", () => {
+  const dualWithGrid = resolveMapGrid({
+    type: "DualMapLayout",
+    config: { ...config, grid: { columns: 2, rows: 1, cells: [{ id: "left" }, { id: "right", column: 2 }] } },
+  });
+
+  it("names filters a side-by-side page targets by their names", () => {
+    expect(
+      legacyTargetingWarnings(
+        [
+          { filterName: "Year Left" },
+          { filterName: "Mode", visualisations: ["Accessibility Side"] },
+          { filterName: "Year Right", panes: ["right"] },
+          { filterName: "Scenario", sides: "left" },
+          { filterName: "Metric", visualisations: ["Flows"] },
+        ],
+        dual,
+        "DualMapLayout"
+      )
+    ).toEqual([expect.stringContaining('"Year Left" picks its panes from its name'), expect.stringContaining('"Mode"')]);
+  });
+
+  it("names filters relying on sides or names on a side-by-side page with a grid", () => {
+    expect(
+      legacyTargetingWarnings(
+        [{ filterName: "Year Left" }, { filterName: "Scenario", sides: "left" }, { filterName: "Metric" }, { filterName: "Year Right", panes: ["right"] }],
+        dualWithGrid,
+        "DualMapLayout"
+      )
+    ).toEqual([expect.stringContaining('"Year Left"'), expect.stringContaining('"Scenario"')]);
+  });
+
+  it("says nothing on single-map pages or grids on other pages", () => {
+    expect(legacyTargetingWarnings([{ filterName: "Year Left", sides: "left" }], single, "MapLayout")).toEqual([]);
+    expect(legacyTargetingWarnings([{ filterName: "Year Left" }], dualWithGrid, "MapLayout")).toEqual([]);
+  });
+});
+
+describe("drawPaneWarnings", () => {
+  const types = ["mapFeatureSelect"];
+  const custom = { preset: "custom" };
+
+  it("warns when feature-select filters on a configured grid target different panes", () => {
+    const filters = [
+      { type: "mapFeatureSelect", panes: ["a"] },
+      { type: "mapFeatureSelect", panes: ["b", "a"] },
+      { type: "dropdown", panes: ["c"] },
+    ];
+    expect(drawPaneWarnings(filters, types, custom)).toEqual([expect.stringContaining('select on "a"')]);
+  });
+
+  it("says nothing when they agree, or on a preset page", () => {
+    expect(drawPaneWarnings([{ type: "mapFeatureSelect", panes: ["a"] }, { type: "mapFeatureSelect", panes: ["a", "b"] }], types, custom)).toEqual([]);
+    expect(drawPaneWarnings([{ type: "mapFeatureSelect", panes: ["left"] }, { type: "mapFeatureSelect", panes: ["right"] }], types, dual)).toEqual([]);
   });
 });

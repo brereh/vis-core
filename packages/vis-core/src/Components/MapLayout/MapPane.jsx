@@ -10,6 +10,7 @@ import { useMap } from "hooks/useMap";
 import { useMapContext } from "hooks/useMapContext";
 import { useFilterContext } from "hooks/useFilterContext";
 import { actionTypes } from "reducers";
+import { selectDrawPaneId } from "../../reducers/mapSelectors";
 import { isValidPoint } from "utils";
 import { Layer } from "./Layer";
 import { SpiderLayer } from "./SpiderLayer";
@@ -103,7 +104,7 @@ const isTouchScreen = () => window.matchMedia("(hover: none), (pointer: coarse)"
  * @param {Object} props
  * @param {Object} props.pane - The pane, from the page's grid.
  * @param {boolean} props.isPrimary - Whether this is the page's primary pane: it tracks the zoom
- *   for the page and hosts the draw control for feature selection.
+ *   for the page.
  * @param {string} [props.extraCopyrightText]
  * @param {boolean} [props.compactAttribution] - Collapse the attribution (several panes).
  * @param {number} [props.tileCacheSize]
@@ -488,9 +489,11 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
 
   // --- page-wide duties of the primary pane ----------------------------------------------------
 
-  // The draw control for feature selection lives on the primary pane.
+  // The draw control for feature selection lives on the pane the page's feature-select
+  // filters target (the primary pane unless they say otherwise).
+  const hostsDrawControl = pane.id === selectDrawPaneId(state);
   useEffect(() => {
-    if (!map || !isPrimary) return;
+    if (!map || !hostsDrawControl) return;
     const drawInstance = new MapboxDraw({
       displayControlsDefault: false,
       modes: { ...MapboxDraw.modes, draw_rectangle: RectangleMode },
@@ -506,7 +509,7 @@ const MapPane = ({ pane, isPrimary, extraCopyrightText, compactAttribution, tile
         // The map may already be gone.
       }
     };
-  }, [map, isPrimary, dispatch]);
+  }, [map, hostsDrawControl, dispatch]);
 
   // Keep `state.currentZoom` in step with the primary pane's zoom, for zoom-gated UI such as
   // the legend and the layer zoom message. Only zoomend: 'zoom' would dispatch on every frame

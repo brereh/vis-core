@@ -175,6 +175,49 @@ let props = {
 };
 
 describe("SelectorSection component test", () => {
+  it("groups filters under pane titles on a grid with titled panes", () => {
+    const mapGrid = {
+      preset: "custom",
+      paneIds: ["base", "future"],
+      panes: [
+        { id: "base", type: "map", title: "Base year" },
+        { id: "future", type: "map", title: "2040" },
+      ],
+    };
+    const filters = [
+      { type: "dropdown", id: "shared", filterName: "Metric", panes: ["base", "future"], paneScope: "all", values: [] },
+      { type: "dropdown", id: "future-year", filterName: "Year", panes: ["future"], paneScope: "subset", values: [] },
+    ];
+    render(
+      <AppContext.Provider value={mockAppContexte}>
+        <MapContext.Provider value={{ state: { ...mockState, mapGrid }, dispatch }}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <SelectorSection {...props} filters={filters} />
+          </FilterContext.Provider>
+        </MapContext.Provider>
+      </AppContext.Provider>
+    );
+    const group = screen.getByRole("region", { name: "2040" });
+    expect(group).toHaveTextContent(/future-year/);
+    expect(group).not.toHaveTextContent(/"id":"shared"/);
+    expect(screen.queryByRole("heading", { name: "Base year" })).not.toBeInTheDocument();
+  });
+
+  it("shows no group headings on a page without pane titles", () => {
+    const filters = [{ type: "dropdown", id: "a", filterName: "A", panes: ["left"], paneScope: "subset", values: [] }];
+    const mapGrid = { preset: "dual", paneIds: ["left", "right"], panes: [{ id: "left", type: "map" }, { id: "right", type: "map" }] };
+    render(
+      <AppContext.Provider value={mockAppContexte}>
+        <MapContext.Provider value={{ state: { ...mockState, mapGrid }, dispatch }}>
+          <FilterContext.Provider value={mockFilterContext}>
+            <SelectorSection {...props} filters={filters} />
+          </FilterContext.Provider>
+        </MapContext.Provider>
+      </AppContext.Provider>
+    );
+    expect(screen.queryAllByRole("heading", { level: 3 })).toHaveLength(0);
+  });
+
   it("Does not render mapViewport filter in sidebar", async () => {
     const viewportFilter = {
       type: "mapViewport",

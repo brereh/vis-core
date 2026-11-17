@@ -1,13 +1,17 @@
 import { renderHook } from "@testing-library/react";
 import {
   mergeOverrides,
+  selectClassificationData,
   selectClassificationPanes,
+  selectDrawPaneId,
+  selectLayerControlPane,
   selectMaps,
   selectPaneMap,
   selectPaneOfMap,
   selectPanesShowing,
   selectPaneView,
   selectPaneVisualisation,
+  selectVisualisationForLayer,
 } from "./mapSelectors";
 import { usePaneVisualisation, useShallowStableArray } from "../hooks/usePaneVisualisation";
 import { resolveMapGrid } from "../map/resolveMapGrid";
@@ -162,5 +166,99 @@ describe("selectPaneView", () => {
     const state = { visualisations: { [VIS]: page }, paneOverrides: {}, paneData: { main: { [VIS]: data } } };
     expect(selectPaneView(state, "main", VIS)).toBe(page);
     expect(selectPaneView({ visualisations: { [VIS]: page } }, "main", VIS)).toBe(page);
+  });
+});
+
+describe("selectClassificationData", () => {
+  const ownGrid = resolveMapGrid({
+    type: "MapLayout",
+    config: {
+      visualisations: [{ name: VIS, type: "joinDataToMap" }],
+      grid: { columns: 3, rows: 1, cells: [{ id: "a" }, { id: "b", column: 2 }, { id: "c", column: 3, classification: "own" }] },
+    },
+  });
+  const state = {
+    mapGrid: ownGrid,
+    visualisations: { [VIS]: { ...visualisation, data: ["page"] } },
+    paneData: { a: { [VIS]: [1] }, b: { [VIS]: [2] }, c: { [VIS]: [3] } },
+  };
+
+  it("gives the data of the pane's whole classification group", () => {
+    expect(selectClassificationData(state, VIS, "a")).toEqual([1, 2]);
+    expect(selectClassificationData(state, VIS, "b")).toEqual([1, 2]);
+  });
+
+  it("gives an own-classification pane its own data", () => {
+    expect(selectClassificationData(state, VIS, "c")).toEqual([3]);
+  });
+
+  it("matches the page copy's combined data on a side-by-side page", () => {
+    const dual = { mapGrid: grid, visualisations: { [VIS]: visualisation }, paneData: { left: { [VIS]: [1] }, right: { [VIS]: [2] } } };
+    expect(selectClassificationData(dual, VIS, "right")).toEqual([1, 2]);
+  });
+
+  it("falls back to the page copy's data where no pane has stored any", () => {
+    expect(selectClassificationData({ ...state, paneData: {} }, VIS, "a")).toEqual(["page"]);
+  });
+});
+
+describe("selectVisualisationForLayer and selectLayerControlPane", () => {
+  const state = {
+    mapGrid: grid,
+    visualisations: { [VIS]: { joinLayer: "Zones" }, Flows: { joinLayer: "Links" } },
+  };
+
+  it("picks the visualisation joined to the layer, otherwise the first", () => {
+    expect(selectVisualisationForLayer(state, "Links")).toBe("Flows");
+    expect(selectVisualisationForLayer(state, "Unjoined")).toBe(VIS);
+    expect(selectVisualisationForLayer({ visualisations: {} }, "Links")).toBeUndefined();
+  });
+
+  it("describes a side-by-side page's layers from the left pane", () => {
+    expect(selectLayerControlPane(state, "Zones", VIS)).toBe("left");
+  });
+
+  it("describes a layer from the first pane showing it and its visualisation", () => {
+    const custom = resolveMapGrid({
+      type: "MapLayout",
+      config: {
+        layers: [{ name: "Zones" }, { name: "Links" }],
+        visualisations: [{ name: VIS, type: "joinDataToMap" }, { name: "Flows", type: "joinDataToMap" }],
+        grid: {
+          columns: 3,
+          rows: 1,
+          cells: [
+            { id: "a", layers: ["Zones"], visualisations: [VIS] },
+            { id: "b", column: 2, layers: ["Links"], visualisations: [VIS] },
+            { id: "c", column: 3, layers: ["Links"], visualisations: ["Flows"] },
+          ],
+        },
+      },
+    });
+    const customState = { ...state, mapGrid: custom };
+    expect(selectLayerControlPane(customState, "Links", "Flows")).toBe("c");
+    expect(selectLayerControlPane(customState, "Links", "Nope")).toBe("b");
+    expect(selectLayerControlPane(customState, "Unknown")).toBe("a");
+  });
+});
+
+describe("selectDrawPaneId", () => {
+  const custom = resolveMapGrid({
+    type: "MapLayout",
+    config: { grid: { columns: 2, rows: 1, cells: [{ id: "a" }, { id: "b", column: 2 }] } },
+  });
+
+  it("uses the first feature-select filter's first pane on a configured grid", () => {
+    const filters = [{ type: "dropdown", panes: ["a"] }, { type: "mapFeatureSelectAndPan", panes: ["b"] }];
+    expect(selectDrawPaneId({ mapGrid: custom, filters })).toBe("b");
+  });
+
+  it("falls back to the primary pane", () => {
+    expect(selectDrawPaneId({ mapGrid: custom, filters: [] })).toBe("a");
+    expect(selectDrawPaneId({ mapGrid: custom, filters: [{ type: "mapFeatureSelect", panes: ["gone"] }] })).toBe("a");
+  });
+
+  it("keeps a preset page's draw control on its primary pane", () => {
+    expect(selectDrawPaneId({ mapGrid: grid, filters: [{ type: "mapFeatureSelect", panes: ["right"] }] })).toBe("left");
   });
 });

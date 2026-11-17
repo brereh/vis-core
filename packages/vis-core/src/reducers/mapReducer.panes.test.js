@@ -228,3 +228,13 @@ describe("page reset forgets the maps (fixed drift, plan §2.2(6))", () => {
     expect(registeredMaps(state)).toEqual([]);
   });
 });
+
+describe("feature focus requests", () => {
+  it("keep the panes they are for", () => {
+    const next = mapReducer({}, {
+      type: actionTypes.SET_BOUNDS_AND_CENTROID,
+      payload: { bounds: "b", centroid: "c", featureName: "Leeds", layerMetadata: {}, panes: ["right"] },
+    });
+    expect(next.mapBoundsAndCentroid).toEqual({ bounds: "b", centroid: "c", featureName: "Leeds", layerMetadata: {}, panes: ["right"] });
+  });
+});

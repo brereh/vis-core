@@ -172,7 +172,7 @@ function checkGrid(grid, pageConfig) {
     const clash = tracks.find((key) => occupied.has(key));
     if (clash) {
       const [c, r] = clash.split(",");
-      warnings.push(`${label} overlaps cell "${occupied.get(clash)}" at column ${c}, row ${r}; leaving it out.`);
+      warnings.push(`${label} overlaps cell "${occupied.get(clash)}" at column ${c}, row ${r}; leaving it out, so filters targeting it won't apply.`);
       return null;
     }
     tracks.forEach((key) => occupied.set(key, cell.id));
@@ -222,11 +222,6 @@ export function resolveMapGrid(page) {
     } else {
       layout = checked;
       preset = "custom";
-      if (presetName === "dual") {
-        layout.warnings.push(
-          `This side-by-side page has a grid, so filters' "sides" and Left/Right names no longer pick panes; give filters "panes" instead.`
-        );
-      }
       if (mapCells.length > MAX_RECOMMENDED_MAP_PANES) {
         layout.warnings.push(
           `The grid has ${mapCells.length} map panes. More than ${MAX_RECOMMENDED_MAP_PANES} works, but each costs a WebGL context and memory; browsers drop contexts beyond about 16.`

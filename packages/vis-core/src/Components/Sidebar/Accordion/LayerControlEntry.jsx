@@ -21,7 +21,12 @@ import {
   getMetricDefinition,
 } from "utils/map";
 import { getVisualisationDisplayMode } from "utils/displayMode";
-import { selectMapGrid, selectPaneView } from "../../../reducers/mapSelectors";
+import {
+  selectLayerControlPane,
+  selectPaneMap,
+  selectPaneView,
+  selectVisualisationForLayer,
+} from "../../../reducers/mapSelectors";
 
 /**
  * Styled container for the layer control entry.
@@ -322,15 +327,21 @@ export const LayerControlEntry = memo(
     const selectedMetricParamName = currentPage.config.filters.find(
       (filter) => filter.containsLegendInfo === true
     );
-    // The controls describe what the primary pane draws (the left one on a side-by-side page):
-    // the page's visualisation with that pane's own params and data. On a single-map page
-    // that is the page's copy itself.
-    const firstVisualisationName = Object.keys(state.visualisations)[0];
-    const primaryPaneId = selectMapGrid(state).primaryPaneId;
+    // The controls describe the visualisation joined to this layer (otherwise the page's
+    // first), as drawn by the first pane showing the layer (the left one on a side-by-side
+    // page): that pane's own params and data. On a single-map page that is the page's copy.
+    const visualisationName = selectVisualisationForLayer(state, layer.id);
+    const controlPaneId = selectLayerControlPane(state, layer.id, visualisationName);
+    // The map the controls read the layer's live paint from: the control pane's, otherwise the
+    // first map that has the layer (on a grid, a layer may be on later panes only).
+    const controlPaneMap = selectPaneMap(state, controlPaneId);
+    const controlMap = controlPaneMap?.getLayer?.(layer.id)
+      ? controlPaneMap
+      : (maps.find((map) => map?.getLayer?.(layer.id)) ?? maps[0]);
     const visualisation = useMemo(
-      () => selectPaneView(state, primaryPaneId, firstVisualisationName),
+      () => selectPaneView(state, controlPaneId, visualisationName),
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [state.visualisations, state.paneOverrides, state.paneData, primaryPaneId, firstVisualisationName]
+      [state.visualisations, state.paneOverrides, state.paneData, controlPaneId, visualisationName]
     );
 
     const colorStyle = useMemo(() => {
@@ -406,11 +417,11 @@ export const LayerControlEntry = memo(
     let currentWidthFactor = null;
     let currentOpacity = null;
 
-    if (maps.length > 0 && maps[0].getLayer(layer.id)) {
+    if (controlMap?.getLayer(layer.id)) {
       const opacityProp = getOpacityProperty(layer.type);
-      currentOpacity = maps[0].getPaintProperty(layer.id, opacityProp);
+      currentOpacity = controlMap.getPaintProperty(layer.id, opacityProp);
       currentWidthFactor = widthProp
-        ? maps[0].getPaintProperty(layer.id, widthProp)
+        ? controlMap.getPaintProperty(layer.id, widthProp)
         : null;
     }
 
@@ -487,7 +498,7 @@ export const LayerControlEntry = memo(
         }
       }
 
-      if (!maps.length || !maps[0].getLayer(layer.id)) {
+      if (!controlMap?.getLayer(layer.id)) {
         return defaultBandValues || [0, 1, 2, 3, 4];
       }
 
@@ -522,6 +533,7 @@ export const LayerControlEntry = memo(
       currentClassMethod,
       customBandsFromState,
       maps,
+      controlMap,
       layer.id,
       layer.paint,
       defaultBandValues,
@@ -750,7 +762,7 @@ export const LayerControlEntry = memo(
     if (showLayerSearch) {
       collapsibleSections.push({
         key: "search",
-        node: <LayerSearch map={maps[0]} layer={layer} />,
+        node: <LayerSearch map={controlMap} layer={layer} />,
       });
     }
 

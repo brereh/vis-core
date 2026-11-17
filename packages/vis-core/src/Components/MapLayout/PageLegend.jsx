@@ -73,15 +73,21 @@ export function PageLegend() {
   const { state } = useMapContext();
   const grid = selectMapGrid(state);
   const legends = classificationGroups(grid)
-    .map((group) => ({ ...group, map: selectPaneMap(state, legendPaneId(state, grid, group.paneIds)) }))
+    .map((group) => {
+      const paneId = legendPaneId(state, grid, group.paneIds);
+      return { ...group, paneId, map: selectPaneMap(state, paneId) };
+    })
     .filter((group) => group.map);
 
   if (legends.length === 0) return null;
-  if (legends.length === 1) return <DynamicLegend map={legends[0].map} />;
+  if (legends.length === 1) return <DynamicLegend map={legends[0].map} paneId={legends[0].paneId} />;
+  // With several legends, each needs a heading to tell them apart: untitled groups are named by
+  // their pane ids.
+  const headed = legends.map((group) => ({ ...group, title: group.title ?? group.paneIds.join(" + ") }));
   return (
     <LegendStack>
-      {legends.map((group) => (
-        <DynamicLegend key={group.id} map={group.map} title={group.title} stacked />
+      {headed.map((group) => (
+        <DynamicLegend key={group.id} map={group.map} paneId={group.paneId} title={group.title} stacked />
       ))}
     </LegendStack>
   );

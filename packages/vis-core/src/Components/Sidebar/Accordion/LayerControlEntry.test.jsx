@@ -664,4 +664,82 @@ describe("layer controls on a side-by-side page", () => {
       expect(queryParams.scenario.value).toBe("left only")
     );
   });
+
+  it("describe the visualisation joined to the layer, on the first pane showing the layer", () => {
+    const metricSpy = jest.spyOn(require("utils/map"), "getMetricDefinition");
+    const grid = resolveMapGrid({
+      type: "MapLayout",
+      config: {
+        layers: [{ name: "id" }, { name: "other" }],
+        visualisations: [
+          { name: "first", type: "joinDataToMap" },
+          { name: "joined", type: "joinDataToMap" },
+        ],
+        grid: {
+          columns: 2,
+          rows: 1,
+          cells: [
+            { id: "a", layers: ["other"], visualisations: ["first"] },
+            { id: "b", column: 2, layers: ["id"], visualisations: ["joined"] },
+          ],
+        },
+      },
+    });
+    const state = {
+      ...props.state,
+      layers: [],
+      mapGrid: grid,
+      visualisations: {
+        first: { id: "first", joinLayer: "other", style: "line-continuous", queryParams: { scenario: { value: "first", required: true } } },
+        joined: { id: "joined", joinLayer: "id", style: "line-continuous", queryParams: { scenario: { value: "page", required: true } } },
+      },
+      paneOverrides: { b: { joined: { queryParams: { scenario: { value: "pane b", required: true } } } } },
+      paneData: { b: { joined: [{ value: 1 }] } },
+    };
+    render(
+      <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
+        <PageContext.Provider value={mockPageContext}>
+          <AppContext.Provider value={mockAppContexte}>
+            <LayerControlEntry
+              {...props}
+              layer={{ ...props.layer, id: "id", metadata: { ...props.layer.metadata, isStylable: true } }}
+              state={state}
+            />
+          </AppContext.Provider>
+        </PageContext.Provider>
+      </MapContext.Provider>
+    );
+
+    const scenarios = metricSpy.mock.calls.map(([, , queryParams]) => queryParams.scenario.value);
+    expect(scenarios.length).toBeGreaterThan(0);
+    scenarios.forEach((scenario) => expect(scenario).toBe("pane b"));
+  });
+
+  it("read a layer's live paint from the pane that shows it, when earlier panes don't", () => {
+    const layerless = { getLayer: jest.fn(() => undefined), getPaintProperty: jest.fn() };
+    const withLayer = {
+      getLayer: jest.fn(() => true),
+      getPaintProperty: jest.fn((id, prop) => (prop.includes("opacity") ? 0.8 : 1)),
+    };
+    const grid = resolveMapGrid({
+      type: "MapLayout",
+      config: {
+        layers: [{ name: "id" }, { name: "other" }],
+        visualisations: [],
+        grid: { columns: 2, rows: 1, cells: [{ id: "a", layers: ["other"] }, { id: "b", column: 2, layers: ["id"] }] },
+      },
+    });
+    const state = { ...props.state, layers: [], mapGrid: grid, mapsByPane: { a: layerless, b: withLayer } };
+    render(
+      <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
+        <PageContext.Provider value={mockPageContext}>
+          <AppContext.Provider value={mockAppContexte}>
+            <LayerControlEntry {...props} maps={[layerless, withLayer]} state={state} />
+          </AppContext.Provider>
+        </PageContext.Provider>
+      </MapContext.Provider>
+    );
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(layerless.getPaintProperty).not.toHaveBeenCalled();
+  });
 });

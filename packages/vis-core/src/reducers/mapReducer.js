@@ -181,8 +181,8 @@ export const mapReducer = (state, action) => {
     }
 
     case actionTypes.SET_BOUNDS_AND_CENTROID: {
-      const { centroid, bounds, featureName, layerMetadata } = action.payload;
-      return { ...state, mapBoundsAndCentroid: { centroid, bounds, featureName, layerMetadata } };
+      const { centroid, bounds, featureName, layerMetadata, panes } = action.payload;
+      return { ...state, mapBoundsAndCentroid: { centroid, bounds, featureName, layerMetadata, panes } };
     }
 
     case actionTypes.CLEAR_BOUNDS_AND_CENTROID:

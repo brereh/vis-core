@@ -94,6 +94,76 @@ export function selectClassificationPanes(state, visualisationName, paneId) {
 }
 
 /**
+ * The data a pane's colour classes are computed from: the data of every pane in its
+ * classification group (see `selectClassificationPanes`), together. Falls back to the page
+ * copy's data where no pane has stored any (data stored without a pane).
+ *
+ * @param {Object} state
+ * @param {string} visualisationName
+ * @param {string} paneId
+ * @returns {Array|undefined}
+ */
+export function selectClassificationData(state, visualisationName, paneId) {
+  const panes = selectClassificationPanes(state, visualisationName, paneId);
+  const stored = panes.map((id) => selectPaneData(state, id, visualisationName));
+  if (stored.every((data) => data === undefined)) return state.visualisations?.[visualisationName]?.data;
+  if (stored.length === 1) return stored[0];
+  return stored.flatMap((data) => (Array.isArray(data) ? data : []));
+}
+
+/**
+ * The visualisation whose data colours a layer: the one joined to the layer, otherwise the
+ * page's first.
+ *
+ * @param {Object} state
+ * @param {string} layerId
+ * @returns {string|undefined} The visualisation's name.
+ */
+export function selectVisualisationForLayer(state, layerId) {
+  const entries = Object.entries(state.visualisations ?? {});
+  return (entries.find(([, vis]) => vis?.joinLayer === layerId) ?? entries[0])?.[0];
+}
+
+/**
+ * The pane whose view of a layer the sidebar's layer controls describe: the first pane showing
+ * both the layer and its visualisation, otherwise the first showing the layer, otherwise the
+ * primary pane. (The left pane on a side-by-side page, as before.)
+ *
+ * @param {Object} state
+ * @param {string} layerId
+ * @param {string} [visualisationName]
+ * @returns {string}
+ */
+export function selectLayerControlPane(state, layerId, visualisationName) {
+  const grid = gridOf(state);
+  const showingLayer = panesShowing(grid, { layer: layerId });
+  const showingBoth = visualisationName
+    ? showingLayer.filter((id) => panesShowing(grid, { visualisation: visualisationName }).includes(id))
+    : [];
+  return showingBoth[0] ?? showingLayer[0] ?? grid.primaryPaneId;
+}
+
+/** Filter types that select features on a map with the draw control. */
+export const FEATURE_SELECT_FILTER_TYPES = ["mapFeatureSelect", "mapFeatureSelectWithControls", "mapFeatureSelectAndPan"];
+
+/**
+ * The pane that hosts the page's draw control for feature selection. On a configured grid:
+ * the first pane the page's first feature-select filter targets, otherwise the primary pane.
+ * Preset pages keep it on the primary pane (the left one on a side-by-side page), as before.
+ * Worked out from the stored filters and grid, so it can't fall out of step with them.
+ *
+ * @param {Object} state
+ * @returns {string}
+ */
+export function selectDrawPaneId(state) {
+  const grid = gridOf(state);
+  if (grid.preset !== "custom") return grid.primaryPaneId;
+  const filter = (state.filters ?? []).find((f) => FEATURE_SELECT_FILTER_TYPES.includes(f.type));
+  const paneId = (filter?.panes ?? []).find((id) => grid.paneIds.includes(id));
+  return paneId ?? grid.primaryPaneId;
+}
+
+/**
  * The registered maps, in grid order. Falls back to `state.map` for state that has no
  * pane maps.
  *

@@ -63,7 +63,8 @@ export const MapFeatureSelectAndPan = ({ filter, onChange, ...props }) => {
         bounds, 
         centroid,
         featureName: option.label,
-        layerMetadata: layer.metadata
+        layerMetadata: layer.metadata,
+        panes: filter.panes,
       },
     });
 

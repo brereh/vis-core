@@ -215,9 +215,9 @@ describe("resolveMapGrid with a configured grid", () => {
     expect(grid.warnings).toEqual([expect.stringContaining('visualisation "Card"')]);
   });
 
-  it("warns that a side-by-side page with a grid no longer uses sides or Left/Right names", () => {
+  it("doesn't warn about a side-by-side page's grid itself (filters relying on sides are named instead)", () => {
     const grid = resolveMapGrid({ type: "DualMapLayout", config: { ...config, grid: { columns: 1, rows: 1, cells: [{ id: "a" }] } } });
-    expect(grid.warnings).toEqual([expect.stringContaining('"panes"')]);
+    expect(grid.warnings).toEqual([]);
   });
 
   it("falls back to a shared classification for an unknown value", () => {
