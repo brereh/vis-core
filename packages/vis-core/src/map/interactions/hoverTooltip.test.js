@@ -2,6 +2,8 @@ import {
   clearHover,
   createHoverSession,
   CUSTOM_TOOLTIP_DELAY_MS,
+  HOVER_POPUP_OFFSET,
+  queryHoverFeatures,
   hoverTargets,
   sameTargets,
   showHoverTooltip,
@@ -225,5 +227,47 @@ describe("separate sessions", () => {
     expect(FakePopup.open()).toHaveLength(1);
     expect(FakePopup.open()[0].map).toBe(other);
     expect(hoverState(other, 2)).toBe(true);
+  });
+});
+
+describe("hover-style integration", () => {
+  it("offsets the tooltip from the cursor", () => {
+    show([feature(1)]);
+    expect(FakePopup.open()[0].options.offset).toBe(HOVER_POPUP_OFFSET);
+  });
+
+  it("syncs a layer's hover highlight before marking a newly hovered feature", () => {
+    const hoverStyle = require("../hoverStyle");
+    const sync = jest.spyOn(hoverStyle, "syncHoverLayers");
+    show([feature(1)]);
+    show([feature(1)]);
+    expect(sync).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenCalledWith(map, "zones");
+  });
+});
+
+describe("queryHoverFeatures", () => {
+  const link = (id) => createFeature({ id, layerId: "links", type: "line" });
+  const a = link(1);
+  const b = link(2);
+  let linesMap;
+
+  beforeEach(() => {
+    // A point query finds only B (under the pointer); any box finds A first, then B.
+    linesMap = createFakeMap({
+      renderedFeatures: (geometry) => (typeof geometry[0] === "number" ? [b] : [a, b]),
+    });
+    linesMap.addLayer({ id: "links", type: "line", source: "links" });
+  });
+
+  it("prefers the feature under the pointer over a neighbour within tolerance", () => {
+    const features = queryHoverFeatures(linesMap, session, { x: 5, y: 5 }, ["links"], 6, () => true);
+    expect(features).toEqual([b]);
+  });
+
+  it("keeps the feature already hovered while the pointer stays close to it", () => {
+    session.hovered = hoverTargets([a]);
+    const features = queryHoverFeatures(linesMap, session, { x: 5, y: 5 }, ["links"], 6, () => true);
+    expect(features).toEqual([a]);
   });
 });

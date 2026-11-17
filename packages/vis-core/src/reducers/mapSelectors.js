@@ -55,8 +55,9 @@ export const selectPaneData = (state, paneId, visualisationName) =>
 
 /**
  * Everything one pane shows for a visualisation: its params (see `selectPaneVisualisation`)
- * and its own data rather than all panes' data together. Returns the page's copy itself when
- * neither differs, as on a single-map page.
+ * and its own data rather than all panes' data together. Where several panes show the
+ * visualisation, a pane with no data stored yet has none (not another pane's). Returns the
+ * page's copy itself when neither differs, as on a single-map page.
  *
  * @param {Object} state
  * @param {string} paneId
@@ -65,8 +66,11 @@ export const selectPaneData = (state, paneId, visualisationName) =>
  */
 export function selectPaneView(state, paneId, visualisationName) {
   const visualisation = selectPaneVisualisation(state, paneId, visualisationName);
-  const data = selectPaneData(state, paneId, visualisationName);
-  if (!visualisation || data === undefined || data === visualisation.data) return visualisation;
+  if (!visualisation) return visualisation;
+  const shared = selectPanesShowing(state, { visualisation: visualisationName }).length > 1;
+  const stored = selectPaneData(state, paneId, visualisationName);
+  const data = stored === undefined && shared ? [] : stored;
+  if (data === undefined || data === visualisation.data) return visualisation;
   return { ...visualisation, data };
 }
 

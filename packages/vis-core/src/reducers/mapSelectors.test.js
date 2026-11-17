@@ -145,6 +145,17 @@ describe("selectPaneView", () => {
     expect(left.style).toBe("polygon-continuous");
   });
 
+  it("gives a pane with no data stored yet no data, not the other panes'", () => {
+    const state = {
+      mapGrid: grid,
+      visualisations: { [VIS]: { ...visualisation, data: [{ id: 9 }] } },
+      paneOverrides: {},
+      paneData: { right: { [VIS]: [{ id: 9 }] } },
+    };
+    expect(selectPaneView(state, "left", VIS).data).toEqual([]);
+    expect(selectPaneView(state, "right", VIS).data).toEqual([{ id: 9 }]);
+  });
+
   it("returns the page's copy when the pane's data is the page's data", () => {
     const data = [{ id: 1 }];
     const page = { ...visualisation, data };

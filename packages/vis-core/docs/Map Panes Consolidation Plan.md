@@ -332,6 +332,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 - name a filter with "Left"/"Right" on a visualisation without "Side" in its name
 - set `sides` on a filter or on one of its actions
 - target a callout card with `UPDATE_DUAL_*`
+- are dual pages whose name doesn't contain "Side-by-Side" and that use banding or metric-dependent layer controls
 
 Also find single-map configs that use `UPDATE_DUAL_*` or `separateSidePaths`.
 
@@ -424,7 +425,7 @@ Behaviour pinned so later phases keep it:
   - Layer-click popups show "Value: 0" for a feature with no `state`. Before, both components threw.
   - On dual maps, a custom tooltip whose response is empty renders its template against `{}`, as the single map does. Before, it threw and showed the fallback.
   - On dual maps, each label layer updates on its own map's `zoomend`, not on either map's. The maps are synced, so this is equivalent in practice.
-- **Rebased onto `fix/map-hover-styles`.** That branch's hover changes sit in the shared modules rather than in the two components:
+- **Rebased onto `fix/map-hover-styles`.** That branch's hover changes sit in the shared modules rather than in the two components. One small difference: on dual maps the hover search's candidate check also needs a feature id and a configured layer, as the single map's does. Phase 1 drops id-less features on dual maps, so the search would otherwise stop on a feature that then shows nothing. The changes:
   - nearest-first hover picking with the hovered feature kept (`queryHoverFeatures` in hoverTooltip.js, used by both components, with `isHoverCandidate`)
   - `syncHoverLayers` before hover and selected state (hoverTooltip.js, selectionHighlight.js, and the single map's click selection)
   - the tooltip offset
@@ -441,7 +442,7 @@ Behaviour pinned so later phases keep it:
 
 *Exit:* reducer tests are rewritten around panes, and fixes 5–6 are flipped.
 
-**Phase 2 result.** Full suite: 118 suites and 983 tests, all passing. Fixes 5 and 6 are flipped, which leaves 4 known-drift tests for Phase 3.
+**Phase 2 result.** Full suite: 118 suites and 995 tests, all passing. Fixes 5 and 6 are flipped, which leaves 4 known-drift tests for Phase 3.
 
 - **New modules:**
   - `src/map/resolveMapGrid.js` (presets only; custom grids come in Phase 4)
@@ -463,11 +464,11 @@ Behaviour pinned so later phases keep it:
   - A side-specific filter using `UPDATE_*_PARAMS` changes its own pane; before, its value never reached the maps.
   - `UPDATE_DUAL_*` from a filter that is neither side-specific nor on a "Side" visualisation targets both panes afterwards; before, the left pane only.
   - A `sides` set on a filter in the page config steers its map actions, and wins over the name rules. Before, it only chose the feature-lookup side, and the name rules overwrote it on "Side" visualisations.
-  - A `sides` or `panes` set on an action in the page config still wins over the filter's target, as before.
+  - A `sides` or `panes` set on an action in the page config wins over the filter's target, at load and afterwards. Before, it won only at load: afterwards, the name-derived side replaced it for filters on "Side" visualisations. For example, a filter named "Left …" whose action sets `sides: "both"` used to change only the left pane after load, and now changes both.
   - A callout card targeted by `UPDATE_DUAL_*` now gets the value, on its page copy; between a Left and a Right filter, the last change wins. Before, callout cards never saw these values.
   - Feature selects, including download-section filters that never pass through `MapContext`, pick their lookup pane with the same rules. In practice the outcome is unchanged: "Right" in the name, or `sides: "right"`, means right; otherwise left.
   - A pane classifies over its own freshly fetched data plus the other panes' last stored data. Before, both sides came from state, one render behind.
-  - The layer controls describe the primary (left) pane, with its own params and data, as before; its display mode is now up to date.
+  - The layer controls describe the primary (left) pane, with its own params and data, and an up-to-date display mode. With no data stored yet, the left pane has none, rather than the right pane's. Before, only pages named "Side-by-Side" read the left copy; other dual pages read the page copy, which had no data and no per-side params.
   - Map-click filters on visualisations without "Side" are no longer re-dispatched by `MapLayout`. Before, it re-sent their single value to the left pane, overwriting that pane's own clicked feature. `DualMaps` dispatches every map-click filter per side, so `MapLayout` now leaves all map-click filters to it on multi-pane pages. Phase 3 narrows this to filters that target several panes.
 - **Behaviour changes on single-map pages, from dual-only options only:**
   - `UPDATE_DUAL_*` now applies, to the only pane; before, it wrote copies nothing read.
