@@ -51,7 +51,8 @@ const PaneContainer = styled.div`
 const ContextLostMessage = styled.div`
   position: absolute;
   inset: 0;
-  z-index: 2;
+  /* Above MapLibre's controls (z-index 2). */
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;

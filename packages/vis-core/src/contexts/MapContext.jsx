@@ -21,9 +21,8 @@ import { api } from "services";
 import { useMetadataDrivenFilters } from "hooks/useMetadataDrivenFilters";
 import { BASE_MAPS, DEFAULT_BASE_MAP_ID, getBaseMap } from "../map/baseMaps";
 import { readBaseMapPreference, writeBaseMapPreference } from "../map/baseMapPreference";
-import { resolveMapGrid } from "../map/resolveMapGrid";
 import { resolveFilterPanes } from "../map/resolveFilterPanes";
-import { filterPaneWarnings } from "../map/resolveMapGrid";
+import { filterPaneWarnings, resolveMapGrid } from "../map/resolveMapGrid";
 
 /**
  * Reports problems in a page's grid config, in development only. The app's bundler sets

@@ -52,7 +52,7 @@ const isPositiveInteger = (value) => Number.isInteger(value) && value > 0;
  */
 function toSizes(value) {
   if (isPositiveInteger(value)) return Array.from({ length: value }, () => 1);
-  if (Array.isArray(value) && value.length > 0 && value.every((size) => typeof size === "number" && size > 0)) {
+  if (Array.isArray(value) && value.length > 0 && value.every((size) => Number.isFinite(size) && size > 0)) {
     return value;
   }
   return null;
@@ -102,26 +102,36 @@ function checkGrid(grid, pageConfig) {
   const warnings = [];
   const columnSizes = toSizes(grid.columns);
   const rowSizes = toSizes(grid.rows);
-  if (!columnSizes) warnings.push(`grid.columns must be a positive whole number or a list of positive sizes; using 1.`);
-  if (!rowSizes) warnings.push(`grid.rows must be a positive whole number or a list of positive sizes; using 1.`);
+  if (!columnSizes) warnings.push(`grid.columns must be a positive whole number or a list of positive numbers; using 1.`);
+  if (!rowSizes) warnings.push(`grid.rows must be a positive whole number or a list of positive numbers; using 1.`);
   const columns = columnSizes ?? [1];
   const rows = rowSizes ?? [1];
 
-  const knownVisualisations = new Set((pageConfig?.visualisations ?? []).map((vis) => vis.name));
+  const knownVisualisations = new Set(mapVisualisationNames(pageConfig));
   const knownLayers = new Set(layerNames(pageConfig));
+  const rawCells = Array.isArray(grid.cells) ? grid.cells : [];
+  // Ids the config gives, so generated ids never take one a later cell asks for.
+  const configuredIds = new Set(rawCells.map((cell) => cell?.id).filter((id) => typeof id === "string" && id));
   const seenIds = new Set();
+  const freshId = (base, index) => {
+    let n = index + 1;
+    while (seenIds.has(`${base}-${n}`) || configuredIds.has(`${base}-${n}`)) n += 1;
+    return `${base}-${n}`;
+  };
   const occupied = new Map();
 
-  const cells = (Array.isArray(grid.cells) ? grid.cells : []).map((rawCell, index) => {
+  const cells = rawCells.map((rawCell, index) => {
     const cell = { ...rawCell };
     const label = cell.id ? `Cell "${cell.id}"` : `Cell ${index + 1}`;
 
-    if (!cell.id || typeof cell.id !== "string") {
-      cell.id = `cell-${index + 1}`;
+    if (cell.id === undefined || cell.id === null || cell.id === "") {
+      cell.id = freshId("cell", index);
       warnings.push(`${label} has no id; using "${cell.id}".`);
+    } else if (typeof cell.id !== "string") {
+      cell.id = freshId("cell", index);
+      warnings.push(`${label} has an id that isn't a string; using "${cell.id}".`);
     } else if (seenIds.has(cell.id)) {
-      const original = cell.id;
-      cell.id = `${original}-${index + 1}`;
+      cell.id = freshId(cell.id, index);
       warnings.push(`${label} repeats an id already used; using "${cell.id}".`);
     }
     seenIds.add(cell.id);
@@ -137,29 +147,39 @@ function checkGrid(grid, pageConfig) {
         cell[field] = 1;
       }
     });
+    // Placement is pulled inside the grid: a start past the edge moves to the last track, and a
+    // span past the edge is trimmed.
+    const requestedLastColumn = (cell.column ?? 1) + (cell.columnSpan ?? 1) - 1;
+    const requestedLastRow = (cell.row ?? 1) + (cell.rowSpan ?? 1) - 1;
+    if (requestedLastColumn > columns.length || requestedLastRow > rows.length) {
+      warnings.push(
+        `${label} reaches column ${requestedLastColumn}, row ${requestedLastRow}, outside the ${columns.length}×${rows.length} grid; fitting it inside.`
+      );
+      cell.column = Math.min(cell.column ?? 1, columns.length);
+      cell.row = Math.min(cell.row ?? 1, rows.length);
+      cell.columnSpan = Math.min(cell.columnSpan ?? 1, columns.length - cell.column + 1);
+      cell.rowSpan = Math.min(cell.rowSpan ?? 1, rows.length - cell.row + 1);
+    }
     const column = cell.column ?? 1;
     const row = cell.row ?? 1;
     const lastColumn = column + (cell.columnSpan ?? 1) - 1;
     const lastRow = row + (cell.rowSpan ?? 1) - 1;
-    if (lastColumn > columns.length || lastRow > rows.length) {
-      warnings.push(
-        `${label} reaches column ${lastColumn}, row ${lastRow}, outside the ${columns.length}×${rows.length} grid.`
-      );
-    }
+    // A cell overlapping an earlier one isn't shown (the earlier cell keeps its space).
+    const tracks = [];
     for (let c = column; c <= lastColumn; c += 1) {
-      for (let r = row; r <= lastRow; r += 1) {
-        const key = `${c},${r}`;
-        if (occupied.has(key)) {
-          warnings.push(`${label} overlaps cell "${occupied.get(key)}" at column ${c}, row ${r}.`);
-        } else {
-          occupied.set(key, cell.id);
-        }
-      }
+      for (let r = row; r <= lastRow; r += 1) tracks.push(`${c},${r}`);
     }
+    const clash = tracks.find((key) => occupied.has(key));
+    if (clash) {
+      const [c, r] = clash.split(",");
+      warnings.push(`${label} overlaps cell "${occupied.get(clash)}" at column ${c}, row ${r}; leaving it out.`);
+      return null;
+    }
+    tracks.forEach((key) => occupied.set(key, cell.id));
 
     if (type === "map") {
       (cell.visualisations ?? []).filter((name) => !knownVisualisations.has(name)).forEach((name) =>
-        warnings.push(`${label} shows visualisation "${name}", which the page doesn't define.`)
+        warnings.push(`${label} shows visualisation "${name}", which isn't one of the page's map visualisations.`)
       );
       (cell.layers ?? []).filter((name) => !knownLayers.has(name)).forEach((name) =>
         warnings.push(`${label} shows layer "${name}", which the page doesn't define.`)
@@ -167,9 +187,13 @@ function checkGrid(grid, pageConfig) {
       if (cell.classification !== undefined && !CLASSIFICATIONS.includes(cell.classification)) {
         warnings.push(`${label} has classification "${cell.classification}"; use "shared" or "own". Using "shared".`);
       }
+    } else {
+      ["classification", "syncGroup", "visualisations", "layers"]
+        .filter((field) => cell[field] !== undefined)
+        .forEach((field) => warnings.push(`${label} isn't a map cell, so its ${field} is ignored.`));
     }
     return cell;
-  });
+  }).filter(Boolean);
 
   return { columns, rows, cells, warnings };
 }
@@ -198,6 +222,11 @@ export function resolveMapGrid(page) {
     } else {
       layout = checked;
       preset = "custom";
+      if (presetName === "dual") {
+        layout.warnings.push(
+          `This side-by-side page has a grid, so filters' "sides" and Left/Right names no longer pick panes; give filters "panes" instead.`
+        );
+      }
       if (mapCells.length > MAX_RECOMMENDED_MAP_PANES) {
         layout.warnings.push(
           `The grid has ${mapCells.length} map panes. More than ${MAX_RECOMMENDED_MAP_PANES} works, but each costs a WebGL context and memory; browsers drop contexts beyond about 16.`

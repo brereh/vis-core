@@ -270,7 +270,7 @@ The `MapLayout` effect B2 skips `type: "map"` filters **only when they target mo
 ### 3.9 Overlays
 
 - **`CalloutCardStack`** is rendered once and anchored to the grid container (`position: relative`). Behaviour is unchanged on single pages, and dual pages lose the duplicate stack.
-- **`PageLegend`** renders one `DynamicLegend` per classification group. Each one is given the group's first pane's map and its `paneIds`, so it reads the group's data through selectors rather than `state.visualisations[].data`.
+- **`PageLegend`** renders one `DynamicLegend` per classification group. Each one is given the map of the group's last pane with data (see the Phase 4 result). Phase 5 has it read the group's data through selectors rather than `state.visualisations[].data`.
   - Groups whose panes have titles show them as a heading. The presets have no titles, so they look as they do today.
   - This replaces dual's "use whichever side has data" rule for choosing a legend.
   - The mobile legend slot portal is unchanged.
@@ -288,7 +288,7 @@ The `MapLayout` effect B2 skips `type: "map"` filters **only when they target mo
 
 ### 3.11 Mobile, touch, attribution and limits
 
-- **Mobile layout:** the grid becomes one column in row-major order. Each map cell gets today's single-map mobile height (`56vh`, minimum 320px) and the `map-stack` wrapper with the attribution bar below it.
+- **Mobile layout:** the grid becomes one column, with cells in config order. Each map cell gets today's single-map mobile height (`56vh`, minimum 320px) and the `map-stack` wrapper with the attribution bar below it.
 - **Touch:** `applyTouchPolicy(map)` applies today's dual-map policy to every pane:
   - **Detection:** only a touch-only device counts (narrow viewport, coarse pointer and no fine pointer). Today's single-map check (viewport ≤ 900px alone) also catches narrow desktop windows and turns off their drag pan and scroll zoom.
   - **On:** one-finger pan (`dragPan`), and pinch to zoom without rotation.
@@ -547,22 +547,25 @@ Map-click filters also change on dual pages:
 
 *Exit:* `resolveMapGrid` tests, plus `MapGrid` tests for a 2×2 grid, a spanning cell, an independent pane and an opted-out pane.
 
-**Phase 4 result.** Full suite: 120 suites and 1063 tests, all passing.
+**Phase 4 result.** Full suite: 121 suites and 1078 tests, all passing.
 
 - **Grid config.** `resolveMapGrid` reads `config.grid` on any map page (a `DualMapLayout` page with a grid uses the grid):
   - `columns` and `rows` take a count or a list of relative sizes
   - each cell takes placement, spans, title, visualisations, layers, sync group and classification, with the defaults in §3.3
   - every cell stays in the grid, but only `map` cells become panes; other types render an empty cell for now
-- **Validation.** Problems don't throw. They come back as warnings, with safe fallbacks:
-  - bad sizes
-  - missing or repeated ids
-  - unknown cell types
-  - placement values that aren't positive whole numbers
-  - cells outside the grid, or overlapping
-  - visualisations or layers the page doesn't define
-  - unknown classification values
+- **Validation.** Problems don't throw. Each comes back as a warning, and where one can be fixed it is:
+  - bad sizes, including sizes that aren't finite (a size of 1 is used)
+  - missing, non-string or repeated ids (a new id is generated that no other cell has or asks for)
+  - unknown cell types (an empty cell)
+  - placement values that aren't positive whole numbers (1 is used)
+  - cells reaching outside the grid (moved and trimmed to fit)
+  - a cell overlapping an earlier one (left out; the earlier cell keeps the space)
+  - visualisations that aren't page map visualisations, or layers the page doesn't define (warned only)
+  - unknown classification values (`"shared"` is used)
+  - map fields (`classification`, `syncGroup`, `visualisations`, `layers`) on a cell that isn't a map (ignored)
   - a grid with no map cells (the page falls back to its preset)
-  - more than 4 map panes
+  - a grid on a `DualMapLayout` page: filters' `sides` and the Left/Right name rules no longer apply, so filters need `panes` (warned only)
+  - more than 4 map panes (warned only)
 
   `filterPaneWarnings` names filters that target panes the grid doesn't have. `MapContext` logs all of them in development only (when the app's bundler sets `process.env.NODE_ENV` to `development`), prefixed with the page name.
 - **Layout.** `MapGrid` turns the sizes into grid tracks and renders cells through a registry of cell types (only `map` for now).
@@ -570,7 +573,7 @@ Map-click filters also change on dual pages:
   - A pane without a sync group neither moves with nor shares hover and popups with the others.
   - A pane with `classification: "own"` classifies over its own data only.
   - A titled pane is a labelled region.
-- **Legend.** `PageLegend` shows a legend per classification group. A page with one group shows a single legend, exactly as before. With several groups, the legends stack in the bottom-right corner, each headed with its panes' titles. Each group's legend lists its last pane with data. `DynamicLegend` gains `title` and `stacked` props.
+- **Legend.** `PageLegend` shows a legend per classification group. A page with one group shows a single legend. With several groups, the legends stack in the bottom-right corner (on mobile each goes to the mobile legend slot); groups with titled panes are headed with those titles. Each group's legend lists its last pane with data for the first map visualisation the group shows. Preset pages keep their earlier rule, checking the page's first visualisation whatever its type, so their legend lists the same map as before. `DynamicLegend` gains `title` and `stacked` props.
 - **Context loss.** If the browser drops a pane's WebGL context, the pane says the map can't be drawn and asks for a reload. The message clears if the context comes back.
 - **No change on presets.** Single and side-by-side pages behave as after Phase 3.
 - **Not yet:**
