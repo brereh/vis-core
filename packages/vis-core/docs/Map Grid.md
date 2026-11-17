@@ -73,9 +73,9 @@ An action can still name its own target: `sides` on an `UPDATE_DUAL_*` action in
 
 - **Sidebar.** When any pane has a title, filters for every pane are listed first. The rest are grouped under the titles of the panes they target. Pages without pane titles keep a flat list.
 - **Map-click filters** (`type: "map"`). A click applies to the filter's panes in the clicked pane's sync group. Each pane takes the feature under the click on its own map.
-- **Feature selection** (`mapFeatureSelect` and similar). On a page with a grid, the draw control sits on the first pane the page's first feature-select filter targets, and a warning is logged if feature-select filters disagree. Preset pages keep it on their first pane.
+- **Feature selection** (`mapFeatureSelect` and similar). On a page with a grid, the draw control sits on the first pane (in grid order) that the page's first feature-select filter targets, and a warning is logged if feature-select filters disagree. Preset pages keep it on their first pane.
 - **Select and pan** (`mapFeatureSelectAndPan`). The map moves to the feature on the filter's panes: one pane per sync group moves, and the rest of its group follows. The feature's label shows on those panes and their groups.
-- **Viewport filters** (`mapViewport`). The bounds are read from the filter's first pane.
+- **Viewport filters** (`mapViewport`). The bounds are read from the filter's first pane, in grid order.
 
 ## Layers, legends and callout cards
 

@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useContext, useReducer } from "react";
+import React, { createContext, useEffect, useContext, useReducer, useRef } from "react";
 import { actionTypes, mapReducer, errorActionTypes } from "reducers";
 import {
   hasRouteParameterOrQuery,
@@ -153,6 +153,8 @@ export const MapProvider = ({ children }) => {
 
 
   const [state, dispatch] = useReducer(mapReducer, initialState);
+  // The draw-pane warning last logged, so the filter effect logs it once per page.
+  const reportedDrawWarningsRef = useRef(null);
 
   const contextValue = React.useMemo(() => {
     return { state, dispatch };
@@ -354,7 +356,13 @@ export const MapProvider = ({ children }) => {
         const { panes, paneScope } = resolveFilterPanes(filter, mapGrid);
         return { ...filter, panes, paneScope };
       });
-      reportGridWarnings(pageContext.pageName, drawPaneWarnings(filtersWithPanes, FEATURE_SELECT_FILTER_TYPES, mapGrid));
+      // Once per page: this effect re-runs as filter options load.
+      const drawWarnings = drawPaneWarnings(filtersWithPanes, FEATURE_SELECT_FILTER_TYPES, mapGrid);
+      const drawWarningKey = `${pageContext.pageName}|${drawWarnings.join("|")}`;
+      if (reportedDrawWarningsRef.current !== drawWarningKey) {
+        reportedDrawWarningsRef.current = drawWarningKey;
+        reportGridWarnings(pageContext.pageName, drawWarnings);
+      }
 
       // Report empty metadata filter warnings (non-fatal — page still loads behind error overlay).
       if (emptyMetadataFilters.length > 0) {

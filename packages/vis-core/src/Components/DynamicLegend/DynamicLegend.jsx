@@ -68,6 +68,8 @@ export const DynamicLegend = ({ map, title, paneId, stacked = false }) => {
   const legendPaneId = paneId ?? grid.primaryPaneId;
   // The params a layer's legend text describes: the page's on presets (as before), and the
   // legend pane's own on a configured grid, where panes in different groups can differ.
+  // Only a configured grid's legend reads pane overrides, so presets don't redraw on them.
+  const legendOverrides = grid.preset === "custom" ? state.paneOverrides?.[legendPaneId] : undefined;
   const legendVisualisation = (key) =>
     grid.preset === "custom" ? selectPaneVisualisation(state, legendPaneId, key) : state.visualisations[key];
 
@@ -427,7 +429,7 @@ export const DynamicLegend = ({ map, title, paneId, stacked = false }) => {
       map.off("styledata", updateLegend);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.filters, state.categoricalLegendCache, map, state.visualisations, state.paneOverrides, state.mapGrid, legendPaneId, state.currentZoom, currentPage]);
+  }, [state.filters, state.categoricalLegendCache, map, state.visualisations, legendOverrides, state.mapGrid, legendPaneId, state.currentZoom, currentPage]);
   
   // This effect forces the container's width to update after legendItems change,
   // working around Firefox's flex-wrap column bug.

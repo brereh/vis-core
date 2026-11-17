@@ -21,7 +21,7 @@ The decisions below were agreed in Q&A. Everything else in this plan follows fro
 | Classification | **Shared by default**: panes showing the same visualisation classify over their combined data. A pane can opt out (`classification: "own"`). |
 | Config | Optional `config.grid` on `MapLayout`. No grid gives a 1×1 preset. `DualMapLayout` is an alias for a 1×2 preset with panes `left` and `right`. |
 | Compatibility | The contract is **page config plus BaseApp**. Every existing config works untouched. Internal JS (hooks, state shape, internal actions) may change, so the release is a plain minor with no BREAKING footer. |
-| Filter targeting | New explicit `filter.panes`. If it is missing, the legacy `sides` value or the Left/Right name rules apply, with a dev-only warning. |
+| Filter targeting | New explicit `filter.panes`. If it is missing, the legacy `sides` value or the Left/Right name rules apply. Filters relying on the name rules get a dev-only warning (`sides` stays supported on the side-by-side preset). |
 | Parity | Dual pages inherit everything the single map does. |
 | Filter UI | One sidebar. Filters that target only some panes are grouped under the pane title (only when panes have titles, so presets look as they do today). |
 | Layer controls | One control per layer, applied to every pane showing it. |
@@ -252,7 +252,7 @@ Each item below is extracted in Phase 1 as a pure module plus a hook, written on
 | `useViewportFilters` | A `mapViewport` filter reads the bbox from its first target pane. Inside a sync group every pane's bbox is the same. |
 | `useFeatureFocus` | `mapBoundsAndCentroid` fits the first target pane; its sync group follows through `syncMaps`, and target panes in other groups are fitted as well. The temporary label is added to each target pane and its group. |
 | `useLabelLayers`, `useVisualisedFeatureFilter` | Per pane, for that pane's layers. |
-| `useDrawControl` | One `MapboxDraw` instance, on the pane targeted by the page's feature-select filter (`filter.panes[0]`), otherwise the primary pane; presets keep it on the primary pane. `selectDrawPaneId(state)` (derived from the stored filters and grid rather than stored, so it can't go stale) tells `useFeatureSelect` which map to query. If feature-select filters target different panes, a dev warning is logged (see §8). |
+| `useDrawControl` | One `MapboxDraw` instance, on the first pane, in grid order, that the page's feature-select filter targets (`filter.panes[0]`; resolved panes are in grid order), otherwise the primary pane; presets keep it on the primary pane. `selectDrawPaneId(state)` (derived from the stored filters and grid rather than stored, so it can't go stale) tells `useFeatureSelect` which map to query. If feature-select filters target different panes, a dev warning is logged (see §8). |
 | `useZoomTracking` | `STORE_CURRENT_ZOOM` comes from the primary pane only, which is today's meaning. Per-group zoom is a follow-up (§8). |
 | `selectionHighlight.js` | `highlightSelectedFeature` from `DualMaps.jsx`, now shared. |
 
@@ -592,31 +592,36 @@ Map-click filters also change on dual pages:
 
 *Exit:* sidebar and layer-control tests on grid pages.
 
-**Phase 5 result.** Full suite: 123 suites and 1113 tests, all passing.
+**Phase 5 result.** Full suite: 124 suites and 1119 tests, all passing.
 
 - **Legacy targeting warnings.** `legacyTargetingWarnings` names, in development:
   - filters on the side-by-side preset that pick their panes from their names
   - filters on a side-by-side page with a grid that rely on `sides` or their names, which the grid doesn't use
 
-  This replaces Phase 4's blanket warning for any side-by-side page with a grid.
+  This replaces Phase 4's blanket warning for any side-by-side page with a grid. Filters with `sides` on the side-by-side preset aren't warned about: `sides` remains a supported way to pick a side there.
 - **Docs.** `docs/Map Grid.md` documents grids, `filter.panes`, the targeting order, and what targeting affects. Phase 6 adds the migration notes.
 - **Sidebar grouping.** `groupFiltersByPane` (§3.10) groups the filters when any pane has a title. Presets have no titles, so they keep a flat list. Each group is a labelled `section` under an `h3` heading.
 - **Layer controls:**
   - `MapLayerSection` lists each layer once across every pane's style: the first pane's layers in order, then layers only later panes have.
   - `LayerControlEntry` finds its visualisation with `selectVisualisationForLayer` (the one joined to the layer, otherwise the first). It describes it as drawn by `selectLayerControlPane`: the first pane showing the layer and visualisation, which is the left pane on side-by-side pages.
+  - It reads the layer's live opacity, width and bands from the control pane's map, otherwise the first map that has the layer, so a layer only later panes show gets its real values (review fix).
   - Paint and visibility changes already reached only the maps that have the layer, through `getLinkedLayerIds`, so `selectMapsShowingLayer` wasn't needed.
 - **Legend on selectors.** `DynamicLegend` takes a `paneId`, defaulting to the primary pane, and `PageLegend` passes each group's legend pane:
   - The band editor and histogram data come from `selectClassificationData`: the group's data together, or an own-classification pane's own data. On presets this equals the page copy's data.
-  - On configured grids, the legend text uses the legend pane's own params. Presets keep the page copy's.
+  - On configured grids, the legend text uses the legend pane's own params. Presets keep the page copy's, and their legend doesn't redraw on pane overrides.
   - With several legends, untitled groups are headed with their pane ids.
 - **Callout cards** fetch and keep their own data and never read the map visualisations' `data`, so they needed no change.
-- **Draw control.** `selectDrawPaneId` puts the draw control on the first pane the page's first feature-select filter targets, on configured grids. Presets keep it on the primary pane. `BaseMapFeatureSelect` selects on that pane's map, and `drawPaneWarnings` logs a development warning when feature-select filters target different panes.
+- **Draw control.** `selectDrawPaneId` puts the draw control on the first pane the page's first feature-select filter targets, on configured grids. Presets keep it on the primary pane. `BaseMapFeatureSelect` selects on that pane's map; on a grid it waits for that map rather than falling back to the primary one. `drawPaneWarnings` logs a development warning, once per page, when feature-select filters target different panes.
 - **Feature focus targeting.** Select-and-pan requests carry their filter's `panes`. `useFeatureFocus` moves one target pane per sync group (the rest of the group follows) and labels every target pane and its group. Without panes it moves the primary pane, as before.
 - **Carried from the Phase 4 review:**
   - empty cells take no space on mobile
   - the overlap warning says the dropped pane's filters won't apply
   - §3.9 wording
-- **Data mirror.** `state.visualisations[].data` has no readers left, apart from `selectClassificationData`'s fallback for data stored without a pane and `selectPaneView`'s identity check. Phase 6 deletes it.
+- **Data mirror.** `state.visualisations[].data` is read only through two selectors:
+  - `selectClassificationData`'s fallback, for data stored without a pane
+  - `selectPaneView`, which compares against it and returns the page copy (mirror included) when only one pane shows the visualisation; `LayerControlEntry` reads that
+
+  The only writer always passes a pane, so Phase 6 can delete the mirror once those two read pane data directly.
 - **No change on presets,** apart from the `joinLayer` rule for layer controls listed in §4.
 
 ### Phase 6: Docs and cleanup

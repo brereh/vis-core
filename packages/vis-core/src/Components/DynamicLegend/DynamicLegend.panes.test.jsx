@@ -97,3 +97,36 @@ describe("DynamicLegend data per pane", () => {
     expect(lastDataFor("Zones")).toEqual(["page copy"]);
   });
 });
+
+describe("DynamicLegend params per pane", () => {
+  const twoPanes = resolveMapGrid({
+    type: "MapLayout",
+    config: { ...config, grid: { columns: 2, rows: 1, cells: [{ id: "a" }, { id: "b", column: 2, classification: "own" }] } },
+  });
+  const withParams = {
+    ...baseState,
+    visualisations: {
+      [VIS]: { ...baseState.visualisations[VIS], queryParams: { year: { value: 2020, required: true } } },
+    },
+    paneOverrides: { b: { [VIS]: { queryParams: { year: { value: 2040, required: true } } } } },
+  };
+  const yearsUsed = (spy) => spy.mock.calls.map(([, , queryParams]) => queryParams.year.value);
+
+  it("describes a configured grid's legend with its pane's own params", () => {
+    const spy = jest.spyOn(require("utils/map"), "getMetricDefinition");
+    renderLegend({ ...withParams, mapGrid: twoPanes }, { paneId: "b" });
+    expect(yearsUsed(spy).length).toBeGreaterThan(0);
+    yearsUsed(spy).forEach((year) => expect(year).toBe(2040));
+  });
+
+  it("describes a preset's legend with the page's params, as before", () => {
+    const spy = jest.spyOn(require("utils/map"), "getMetricDefinition");
+    const dual = resolveMapGrid({ type: "DualMapLayout", config });
+    renderLegend(
+      { ...withParams, mapGrid: dual, paneOverrides: { right: withParams.paneOverrides.b } },
+      { paneId: "right" }
+    );
+    expect(yearsUsed(spy).length).toBeGreaterThan(0);
+    yearsUsed(spy).forEach((year) => expect(year).toBe(2020));
+  });
+});

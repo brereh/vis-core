@@ -23,6 +23,7 @@ import {
 import { getVisualisationDisplayMode } from "utils/displayMode";
 import {
   selectLayerControlPane,
+  selectPaneMap,
   selectPaneView,
   selectVisualisationForLayer,
 } from "../../../reducers/mapSelectors";
@@ -331,6 +332,12 @@ export const LayerControlEntry = memo(
     // page): that pane's own params and data. On a single-map page that is the page's copy.
     const visualisationName = selectVisualisationForLayer(state, layer.id);
     const controlPaneId = selectLayerControlPane(state, layer.id, visualisationName);
+    // The map the controls read the layer's live paint from: the control pane's, otherwise the
+    // first map that has the layer (on a grid, a layer may be on later panes only).
+    const controlPaneMap = selectPaneMap(state, controlPaneId);
+    const controlMap = controlPaneMap?.getLayer?.(layer.id)
+      ? controlPaneMap
+      : (maps.find((map) => map?.getLayer?.(layer.id)) ?? maps[0]);
     const visualisation = useMemo(
       () => selectPaneView(state, controlPaneId, visualisationName),
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -410,11 +417,11 @@ export const LayerControlEntry = memo(
     let currentWidthFactor = null;
     let currentOpacity = null;
 
-    if (maps.length > 0 && maps[0].getLayer(layer.id)) {
+    if (controlMap?.getLayer(layer.id)) {
       const opacityProp = getOpacityProperty(layer.type);
-      currentOpacity = maps[0].getPaintProperty(layer.id, opacityProp);
+      currentOpacity = controlMap.getPaintProperty(layer.id, opacityProp);
       currentWidthFactor = widthProp
-        ? maps[0].getPaintProperty(layer.id, widthProp)
+        ? controlMap.getPaintProperty(layer.id, widthProp)
         : null;
     }
 
@@ -491,7 +498,7 @@ export const LayerControlEntry = memo(
         }
       }
 
-      if (!maps.length || !maps[0].getLayer(layer.id)) {
+      if (!controlMap?.getLayer(layer.id)) {
         return defaultBandValues || [0, 1, 2, 3, 4];
       }
 
@@ -526,6 +533,7 @@ export const LayerControlEntry = memo(
       currentClassMethod,
       customBandsFromState,
       maps,
+      controlMap,
       layer.id,
       layer.paint,
       defaultBandValues,
@@ -754,7 +762,7 @@ export const LayerControlEntry = memo(
     if (showLayerSearch) {
       collapsibleSections.push({
         key: "search",
-        node: <LayerSearch map={maps[0]} layer={layer} />,
+        node: <LayerSearch map={controlMap} layer={layer} />,
       });
     }
 

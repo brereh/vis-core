@@ -714,4 +714,32 @@ describe("layer controls on a side-by-side page", () => {
     expect(scenarios.length).toBeGreaterThan(0);
     scenarios.forEach((scenario) => expect(scenario).toBe("pane b"));
   });
+
+  it("read a layer's live paint from the pane that shows it, when earlier panes don't", () => {
+    const layerless = { getLayer: jest.fn(() => undefined), getPaintProperty: jest.fn() };
+    const withLayer = {
+      getLayer: jest.fn(() => true),
+      getPaintProperty: jest.fn((id, prop) => (prop.includes("opacity") ? 0.8 : 1)),
+    };
+    const grid = resolveMapGrid({
+      type: "MapLayout",
+      config: {
+        layers: [{ name: "id" }, { name: "other" }],
+        visualisations: [],
+        grid: { columns: 2, rows: 1, cells: [{ id: "a", layers: ["other"] }, { id: "b", column: 2, layers: ["id"] }] },
+      },
+    });
+    const state = { ...props.state, layers: [], mapGrid: grid, mapsByPane: { a: layerless, b: withLayer } };
+    render(
+      <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
+        <PageContext.Provider value={mockPageContext}>
+          <AppContext.Provider value={mockAppContexte}>
+            <LayerControlEntry {...props} maps={[layerless, withLayer]} state={state} />
+          </AppContext.Provider>
+        </PageContext.Provider>
+      </MapContext.Provider>
+    );
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(layerless.getPaintProperty).not.toHaveBeenCalled();
+  });
 });
