@@ -3,6 +3,7 @@ import {
   buildTooltip,
   fetchCustomTooltip,
   hoverableLayerIds,
+  isHoverCandidate,
   hoverBufferSize,
   HOVER_BUFFER_FLOOR,
   layerClickHtml,
@@ -296,5 +297,20 @@ describe("layerClickHtml", () => {
     const noState = zone();
     delete noState.state;
     expect(layerClickHtml(noState)).toContain("Value: 0");
+  });
+});
+
+describe("isHoverCandidate", () => {
+  const layers = { zones: {}, dataOnly: { shouldHaveHoverOnlyOnData: true }, stations: {} };
+
+  it.each([
+    ["a feature on a configured layer", zone(), true],
+    ["a spider feature of a configured layer", zone({ layerId: "stations-spider" }), true],
+    ["a feature without an id", { ...zone(), id: undefined }, false],
+    ["a feature on an unconfigured layer", zone({ layerId: "unknown" }), false],
+    ["a feature without data on a data-only layer", zone({ layerId: "dataOnly", state: {} }), false],
+    ["a feature with data on a data-only layer", zone({ layerId: "dataOnly", state: { value: 0 } }), true],
+  ])("%s → %s", (_, feature, expected) => {
+    expect(isHoverCandidate(feature, layers)).toBe(expected);
   });
 });

@@ -98,7 +98,6 @@ describe("Test to render a CalloutVisualisationCard", () => {
       },
     },
     map: {},
-    maps: {},
     sidebarIsOpen: false,
     left: "left"
   };
@@ -222,7 +221,6 @@ describe("Test to render a Map", () => {
       },
     },
     map: {},
-    maps: {},
   };
   const propsType2 = {
     visualisationConfigs: {
@@ -232,7 +230,6 @@ describe("Test to render a Map", () => {
       },
     },
     map: {},
-    maps: {},
   };
   it("render a map with the geojson type", () => {
     render(

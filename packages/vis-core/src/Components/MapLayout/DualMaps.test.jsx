@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 import DualMaps from "./DualMaps";
 import { MapContext } from "contexts/MapContext";
 import { FilterContext } from "contexts/FilterContext";
@@ -21,9 +22,7 @@ const mockMapControls = {
 };
 
 jest.mock("./VisualisationManager", () => ({
-  VisualisationManager: ({ visualisationConfigs, map, left }) => (
-    <span>VisualisationManager: {left ? "left" : "right"}</span>
-  ),
+  VisualisationManager: ({ paneId }) => <span>VisualisationManager: {paneId}</span>,
 }));
 jest.mock("./Layer", () => ({
   Layer: ({ layer }) => <span>Layer: {JSON.stringify(layer)}</span>,
@@ -75,16 +74,8 @@ let mockMapContext = {
         },
       },
     },
-    leftVisualisations: {
-      data: {
-        data: ["dataLeft"],
-      },
-    },
-    rightVisualisations: {
-      data: {
-        data: ["dataRight"],
-      },
-    },
+    mapGrid: resolveMapGrid({ type: "DualMapLayout" }),
+    paneData: {},
     metadataTables: {},
     metadataFilters: [],
     filters: [],
@@ -198,18 +189,8 @@ describe("DualMaps component test", () => {
       ...mockMapContext,
       state: {
         ...mockMapContext.state,
-        leftVisualisations: {
-          data: {
-            data: ["dataLeft"],
-          },
-        },
-        rightVisualisations: {
-          data: {
-            data: [
-              /* Empty */
-            ],
-          },
-        },
+        // Only the left pane has data for the first visualisation.
+        paneData: { left: { climate: ["dataLeft"] }, right: { climate: [] } },
       },
     };
     render(
@@ -877,9 +858,9 @@ describe("map filter clicks with a different feature on each side", () => {
 
     leftMap.handlers.click({ point: { x: 10, y: 10 }, target: leftMap });
 
-    expect(queryParamDispatches().map(({ payload }) => [payload.sides, payload.value])).toEqual([
-      ["left", 101],
-      ["right", 9001],
+    expect(queryParamDispatches().map(({ payload }) => [payload.panes, payload.value])).toEqual([
+      [["left"], 101],
+      [["right"], 9001],
     ]);
     expect(leftMap.addSource).toHaveBeenCalledWith(
       "selected-feature-source",
@@ -953,9 +934,9 @@ describe("map filter clicks with a different feature on each side", () => {
 
     leftMap.handlers.click({ point: { x: 10, y: 10 }, target: leftMap });
 
-    expect(queryParamDispatches().map(({ payload }) => [payload.sides, payload.value])).toEqual([
-      ["left", null],
-      ["right", 9001],
+    expect(queryParamDispatches().map(({ payload }) => [payload.panes, payload.value])).toEqual([
+      [["left"], null],
+      [["right"], 9001],
     ]);
     expect(leftMap.removeLayer).toHaveBeenCalledWith("selected-feature-layer");
     expect(leftMap.addLayer).not.toHaveBeenCalled();

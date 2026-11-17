@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { resolveMapGrid } from "../../../map/resolveMapGrid";
 import { LayerControlEntry } from "Components/Sidebar/Accordion/LayerControlEntry";
 import { AppContext, MapContext, PageContext } from "contexts";
 
@@ -121,28 +122,6 @@ const props = {
         metadata: {
           source: "UNEP",
           updated: "2025-08-20",
-        },
-      },
-    },
-    leftVisualisations: {
-      first: {
-        type: "bar",
-        data: {
-          labels: ["Jan", "Feb", "Mar"],
-          datasets: [{ label: "Ventes", data: [100, 200, 150] }],
-        },
-        options: {
-          responsive: true,
-        },
-      },
-      second: {
-        type: "bar",
-        data: {
-          labels: ["Jan", "Feb", "Mar"],
-          datasets: [{ label: "Ventes", data: [100, 200, 150] }],
-        },
-        options: {
-          responsive: true,
         },
       },
     },
@@ -643,3 +622,46 @@ describe("LayerControlEntry component test", () => {
   });
 });
 
+describe("layer controls on a side-by-side page", () => {
+  it("describe the left pane: its own params and data, not both panes' together", () => {
+    const metricSpy = jest.spyOn(require("utils/map"), "getMetricDefinition");
+    const leftData = [{ value: 1 }, { value: 2 }];
+    const state = {
+      ...props.state,
+      layers: [],
+      mapGrid: resolveMapGrid({
+        type: "DualMapLayout",
+        config: { visualisations: [{ name: "id", type: "joinDataToMap" }] },
+      }),
+      visualisations: {
+        id: {
+          id: "id",
+          style: "line-continuous",
+          queryParams: { scenario: { value: "base", required: true } },
+          data: [...leftData, { value: 100 }],
+        },
+      },
+      paneOverrides: { left: { id: { queryParams: { scenario: { value: "left only", required: true } } } } },
+      paneData: { left: { id: leftData }, right: { id: [{ value: 100 }] } },
+    };
+    render(
+      <MapContext.Provider value={{ state, dispatch: jest.fn() }}>
+        <PageContext.Provider value={mockPageContext}>
+          <AppContext.Provider value={mockAppContexte}>
+            <LayerControlEntry
+              {...props}
+              layer={{ ...props.layer, id: "id", metadata: { ...props.layer.metadata, isStylable: true } }}
+              state={state}
+            />
+          </AppContext.Provider>
+        </PageContext.Provider>
+      </MapContext.Provider>
+    );
+
+    const queryParamsUsed = metricSpy.mock.calls.map(([, , queryParams]) => queryParams);
+    expect(queryParamsUsed.length).toBeGreaterThan(0);
+    queryParamsUsed.forEach((queryParams) =>
+      expect(queryParams.scenario.value).toBe("left only")
+    );
+  });
+});

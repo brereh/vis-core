@@ -88,16 +88,6 @@ let mockMapContext = {
         },
       },
     },
-    leftVisualisations: {
-      data: {
-        data: ["dataLeft"],
-      },
-    },
-    rightVisualisations: {
-      data: {
-        data: ["dataRight"],
-      },
-    },
     metadataTables: {},
     metadataFilters: [],
     filters: [],

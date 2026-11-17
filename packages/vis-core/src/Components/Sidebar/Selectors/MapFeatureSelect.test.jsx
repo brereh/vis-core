@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { BaseMapFeatureSelect, getFeatureLookupPath } from ".";
+import { filterTargetPane } from "./MapFeatureSelect";
+import { resolveMapGrid } from "../../../map/resolveMapGrid";
 import { MapContext } from "contexts";
 import userEvent from "@testing-library/user-event";
 
@@ -159,11 +161,11 @@ describe("BaseMapFeatureSelect component test", () => {
 describe("getFeatureLookupPath", () => {
   it("defaults to left side path when left has no missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: [],
       },
@@ -172,13 +174,13 @@ describe("getFeatureLookupPath", () => {
     expect(getFeatureLookupPath(layer, "left")).toBe("/api/tiles/left");
   });
 
-  it("selects right side path when targetSide === 'right' and right has no missing params", () => {
+  it("selects right side path when the target pane === 'right' and right has no missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: [],
       },
@@ -188,11 +190,11 @@ describe("getFeatureLookupPath", () => {
 
   it("falls back to right side when left side has missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: ["year"],
         right: [],
       },
@@ -201,13 +203,13 @@ describe("getFeatureLookupPath", () => {
     expect(getFeatureLookupPath(layer)).toBe("/api/tiles/right");
   });
 
-  it("falls back to left side when targetSide is right but right side has missing params", () => {
+  it("falls back to left side when the target pane is right but right side has missing params", () => {
     const layer = {
-      sidePaths: {
+      panePaths: {
         left: "/api/tiles/left",
         right: "/api/tiles/right",
       },
-      sideMissingParams: {
+      paneMissingParams: {
         left: [],
         right: ["year"],
       },
@@ -218,7 +220,7 @@ describe("getFeatureLookupPath", () => {
   it("returns layer.metadata.path if present", () => {
     const layer = {
       metadata: { path: "/api/metadata/tiles" },
-      sidePaths: { left: "/api/tiles/left", right: "/api/tiles/right" },
+      panePaths: { left: "/api/tiles/left", right: "/api/tiles/right" },
     };
     expect(getFeatureLookupPath(layer)).toBe("/api/metadata/tiles");
     expect(getFeatureLookupPath(layer, "right")).toBe("/api/metadata/tiles");
@@ -230,5 +232,20 @@ describe("getFeatureLookupPath", () => {
     };
     expect(getFeatureLookupPath(layer)).toBe("/api/tiles/single");
     expect(getFeatureLookupPath(layer, "right")).toBe("/api/tiles/single");
+  });
+});
+
+describe("filterTargetPane", () => {
+  const dual = { mapGrid: resolveMapGrid({ type: "DualMapLayout" }) };
+
+  it("uses the panes MapContext resolved for sidebar filters", () => {
+    expect(filterTargetPane({ panes: ["right"], filterName: "Zone" }, dual)).toBe("right");
+  });
+
+  it("resolves filters that never went through MapContext, such as download filters", () => {
+    expect(filterTargetPane({ filterName: "Right zone" }, dual)).toBe("right");
+    expect(filterTargetPane({ filterName: "Zone", sides: "right" }, dual)).toBe("right");
+    expect(filterTargetPane({ filterName: "Zone" }, dual)).toBe("left");
+    expect(filterTargetPane({ filterName: "Right zone" }, {})).toBe("main");
   });
 });

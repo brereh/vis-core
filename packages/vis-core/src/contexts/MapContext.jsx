@@ -21,6 +21,8 @@ import { api } from "services";
 import { useMetadataDrivenFilters } from "hooks/useMetadataDrivenFilters";
 import { BASE_MAPS, DEFAULT_BASE_MAP_ID, getBaseMap } from "../map/baseMaps";
 import { readBaseMapPreference, writeBaseMapPreference } from "../map/baseMapPreference";
+import { resolveMapGrid } from "../map/resolveMapGrid";
+import { resolveFilterPanes } from "../map/resolveFilterPanes";
 
 // Create a context for the app configuration
 export const MapContext = createContext();
@@ -112,8 +114,11 @@ export const MapProvider = ({ children }) => {
     colorSchemesByLayer: {},
     customColorSchemeSelectedByLayer: {},
     visualisations: {},
-    leftVisualisations: {},
-    rightVisualisations: {},
+    // Map panes: the page's grid, each pane's map, and what differs between panes.
+    mapGrid: resolveMapGrid(pageContext),
+    mapsByPane: {},
+    paneOverrides: {},
+    paneData: {},
     metadataTables: {},
     metadataFilters: [],
     filters: [],
@@ -164,6 +169,7 @@ export const MapProvider = ({ children }) => {
   // This is independent of filter init and runs immediately on page change.
   useEffect(() => {
     dispatch({ type: actionTypes.SET_IS_LOADING });
+    dispatch({ type: actionTypes.SET_MAP_GRID, payload: resolveMapGrid(pageContext) });
 
     // Initialise non-parameterised layers
     pageContext.config.layers
@@ -248,7 +254,7 @@ export const MapProvider = ({ children }) => {
   // Sync filter pipeline output to mapReducer once metadata-driven filters ready.
   // Handles the map-specific concerns the hook intentionally does not own:
   //   - legacy `api` source resolution
-  //   - `sides` property for dual-map (Left/Right) filter layout (visualisation-specific)
+  //   - which map panes each filter targets (`panes`, `paneScope`)
   //   - error reporting via ErrorContext
   //   - categorical legend cache seeding
   //   - mapReducer dispatches (SET_FILTERS, SET_METADATA_TABLES, SET_PAGE_IS_READY, etc.)
@@ -325,15 +331,11 @@ export const MapProvider = ({ children }) => {
         }
       }
 
-      // Apply the `sides` property for dual-map (Left/Right) filter layout.
-      const filtersWithSides = processedFilters.map((filter) => {
-        if (!filter.visualisations?.[0]?.includes('Side')) return filter;
-        const sides = filter.filterName.includes('Left')
-          ? 'left'
-          : filter.filterName.includes('Right')
-          ? 'right'
-          : 'both';
-        return { ...filter, sides };
+      // Work out which map panes each filter targets, once, for everything downstream.
+      const mapGrid = resolveMapGrid(pageContext);
+      const filtersWithPanes = processedFilters.map((filter) => {
+        const { panes, paneScope } = resolveFilterPanes(filter, mapGrid);
+        return { ...filter, panes, paneScope };
       });
 
       // Report empty metadata filter warnings (non-fatal — page still loads behind error overlay).
@@ -368,10 +370,10 @@ export const MapProvider = ({ children }) => {
       }
 
       // Sync everything to mapReducer.
-      dispatch({ type: actionTypes.SET_FILTERS, payload: filtersWithSides });
+      dispatch({ type: actionTypes.SET_FILTERS, payload: filtersWithPanes });
       dispatch({ type: actionTypes.SET_METADATA_TABLES, payload: metadataTables });
       dispatch({ type: actionTypes.SET_PARAM_NAME_TO_UUID_MAP, payload: paramNameToUuidMap });
-      const categoricalLegendSeed = buildCacheSeedFromFilters(filtersWithSides);
+      const categoricalLegendSeed = buildCacheSeedFromFilters(filtersWithPanes);
       if (Object.keys(categoricalLegendSeed).length > 0) {
         dispatch({
           type: actionTypes.MERGE_CATEGORICAL_LEGEND_CACHE,

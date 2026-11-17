@@ -3,7 +3,7 @@
  * pane's tiles.
  *
  * Only the probes (`renderLayerOnPanes`) know how panes render layers today: DualMaps renders
- * every <Layer> once per pane, and each instance adds itself to every map in `state.maps`.
+ * every <Layer> once per pane, and each instance adds itself to every registered pane map.
  * Phase 3 of docs/Map Panes Consolidation Plan.md gives each pane its own <Layer map=…>, and
  * only the probes change.
  *
@@ -14,6 +14,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { MapContext } from "contexts/MapContext";
 import { FilterContext } from "contexts/FilterContext";
 import { createFakeMap } from "testing/mapLibreFake";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 
 jest.mock("maplibre-gl", () => require("testing/mapLibreFake").mapLibreModule());
 jest.mock("services", () => ({
@@ -46,7 +47,7 @@ const tileLayer = {
 };
 
 /** A tile layer whose path differs per side (filters target one side's network). */
-const sidePathLayer = {
+const panePathLayer = {
   name: "Network",
   type: "tile",
   source: "api",
@@ -55,7 +56,7 @@ const sidePathLayer = {
   pathTemplate: "/api/network/{z}/{x}/{y}?spec={spec}",
   path: "/api/network/{z}/{x}/{y}?spec=A",
   separateSidePaths: true,
-  sidePaths: {
+  panePaths: {
     left: "/api/network/{z}/{x}/{y}?spec=A",
     right: "/api/network/{z}/{x}/{y}?spec=B",
   },
@@ -95,8 +96,9 @@ const flushFetches = () =>
 /** Map context for the panes. Built once per render so its identity is stable, as in the app. */
 const paneContext = (layer, maps) => ({
   state: {
+    mapGrid: resolveMapGrid({ type: "DualMapLayout", config: { layers: [layer] } }),
     map: maps.left,
-    maps: [maps.left, maps.right],
+    mapsByPane: { left: maps.left, right: maps.right },
     layers: { [layer.name]: layer },
     filters: [],
     paramNameToUuidMap: {},
@@ -107,7 +109,8 @@ const paneContext = (layer, maps) => ({
 const panes = (layer, context, paneCount = 2) => (
   <FilterContext.Provider value={{ state: {}, dispatch: jest.fn() }}>
     <MapContext.Provider value={context}>
-      {/* DualMaps renders the layer list once inside each pane's container. */}
+      {/* DualMaps renders the layer list once inside each pane's container, and each
+          instance adds the layer to every registered pane map. */}
       {Array.from({ length: paneCount }, (_, i) => (
         <Layer key={i} layer={layer} />
       ))}
@@ -147,12 +150,12 @@ describe("layers on side-by-side panes", () => {
 
   it("gives each pane its own side's tiles for a layer with separate side paths", () => {
     const maps = createPaneMaps();
-    renderLayerOnPanes(sidePathLayer, maps);
+    renderLayerOnPanes(panePathLayer, maps);
 
     expect(maps.left.getSource("Network").tiles).toEqual(["http://tiles/api/network/{z}/{x}/{y}?spec=A"]);
     expect(maps.right.getSource("Network").tiles).toEqual(["http://tiles/api/network/{z}/{x}/{y}?spec=B"]);
-    expect(maps.left.getLayer("Network").metadata.path).toBe(sidePathLayer.sidePaths.left);
-    expect(maps.right.getLayer("Network").metadata.path).toBe(sidePathLayer.sidePaths.right);
+    expect(maps.left.getLayer("Network").metadata.path).toBe(panePathLayer.panePaths.left);
+    expect(maps.right.getLayer("Network").metadata.path).toBe(panePathLayer.panePaths.right);
   });
 
   it("adds a GeoJSON layer's source to both panes' maps", async () => {

@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { resolveMapGrid } from "../../../map/resolveMapGrid";
 import { MapLayerSection } from "Components/Sidebar";
 import { MapContext } from "contexts";
 import { registerInitialBaseSources } from "../../../map/baseSources";
@@ -36,7 +37,9 @@ const mockMap2 = {
 
 const mockMapContext = {
   state: {
-    maps: [mockMap1, mockMap2],
+    // A side-by-side page with both maps registered.
+    mapGrid: resolveMapGrid({ type: "DualMapLayout" }),
+    mapsByPane: { left: mockMap1, right: mockMap2 },
     mapStyle: "default",
     mapCentre: [0, 0],
     mapZoom: 10,
@@ -191,7 +194,8 @@ describe("MapLayerSection component test", () => {
       ...mockMapContext,
       state: {
         ...mockMapContext.state,
-        maps: undefined,
+        mapGrid: undefined,
+        mapsByPane: undefined,
         map: mockMap1,
       },
     };
@@ -285,7 +289,8 @@ describe("MapLayerSection component test", () => {
       ...mockMapContext,
       state: {
         ...mockMapContext.state,
-        maps: [fallbackMap],
+        mapGrid: resolveMapGrid({ type: "MapLayout" }),
+        mapsByPane: { main: fallbackMap },
         layers: {},
       },
     };

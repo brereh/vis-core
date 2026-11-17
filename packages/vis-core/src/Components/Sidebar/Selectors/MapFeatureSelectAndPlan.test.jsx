@@ -7,6 +7,7 @@ import { api } from "services";
 
 jest.mock("./MapFeatureSelect.jsx", () => ({
   getFeatureLookupPath: jest.requireActual("./MapFeatureSelect.jsx").getFeatureLookupPath,
+  filterTargetPane: jest.requireActual("./MapFeatureSelect.jsx").filterTargetPane,
   BaseMapFeatureSelect: ({ filter, onChange }) => {
     return (
       <>

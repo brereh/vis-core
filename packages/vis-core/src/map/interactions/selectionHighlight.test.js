@@ -30,6 +30,12 @@ describe("highlightSelectedFeature", () => {
     expect(map.addLayer).not.toHaveBeenCalled();
   });
 
+  it("syncs the layer's highlight before selecting", () => {
+    const sync = jest.spyOn(require("../hoverStyle"), "syncHoverLayers");
+    highlightSelectedFeature(map, tiledZone(1), null);
+    expect(sync).toHaveBeenCalledWith(map, "zones");
+  });
+
   it("unselects the previous feature", () => {
     const first = highlightSelectedFeature(map, tiledZone(1), null);
     const second = highlightSelectedFeature(map, tiledZone(2), first);

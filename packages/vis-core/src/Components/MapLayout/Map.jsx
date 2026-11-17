@@ -15,6 +15,7 @@ import MapStyleToggle from "./MapStyleToggle";
 import { useBaseMapTransition } from "hooks/useBaseMapTransition";
 import { getBaseMap } from "../../map/baseMaps";
 import { syncHoverLayers } from "../../map/hoverStyle";
+import { SINGLE_PANE_ID } from "../../map/resolveMapGrid";
 import { isValidPoint } from "utils";
 import {
   bufferedBox,
@@ -56,6 +57,8 @@ const Map = (props) => {
   const mapContainerRef = useRef(null);
   const { state, dispatch } = useMapContext();
   const { baseMapId, mapStyle, mapCentre, mapZoom } = state;
+  // The single map is the page's only pane.
+  const paneId = state.mapGrid?.primaryPaneId ?? SINGLE_PANE_ID;
   const currentBaseMap = getBaseMap(baseMapId);
   const { map, isMapReady } = useMap(mapContainerRef, mapStyle, mapCentre, mapZoom, props.extraCopyrightText);
 
@@ -537,15 +540,19 @@ const Map = (props) => {
     return () => map.getCanvas().removeEventListener('touchend', onTouchEndShowTooltip);
   }, [map, handleMapHover]);
 
-  // Run once to set the state of the map
+  // Register this pane's map once it's ready, and again if a page reset has cleared it while
+  // this map stayed mounted. Unregister it when the map goes.
+  const registeredMap = state.mapsByPane?.[paneId];
   useEffect(() => {
-    if (isMapReady) {
-      dispatch({
-        type: "SET_MAP",
-        payload: { map },
-      });
+    if (isMapReady && map && registeredMap !== map) {
+      dispatch({ type: actionTypes.SET_PANE_MAP, payload: { paneId, map } });
     }
-  }, [isMapReady]);
+  }, [isMapReady, map, registeredMap, paneId, dispatch]);
+
+  useEffect(() => {
+    if (!map) return undefined;
+    return () => dispatch({ type: actionTypes.REMOVE_PANE_MAP, payload: { paneId, map } });
+  }, [map, paneId, dispatch]);
 
   // Keep `state.currentZoom` in sync with the actual map zoom.
   // This is used by DynamicLegend and useLayerZoomMessage. Previously it was
@@ -778,7 +785,7 @@ const Map = (props) => {
       {state.visualisations && <VisualisationManager
         visualisationConfigs={state.visualisations}
         map={map}
-        maps={null}
+        paneId={paneId}
         sidebarIsOpen={sidebarIsOpen}
       />}
       {isMapReady && <DynamicLegend map={map} />}

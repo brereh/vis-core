@@ -8,6 +8,8 @@ import {
   getApplicationLayerRootId,
 } from "../../../map/applicationLayerIds";
 import { getInitialBaseSources } from "../../../map/baseSources";
+import { selectMaps } from "../../../reducers/mapSelectors";
+import { useShallowStableArray } from "../../../hooks/usePaneVisualisation";
 
 /**
  * MapLayerSection component represents a section for controlling map layers.
@@ -26,12 +28,7 @@ export const MapLayerSection = ({
   handleCustomBandsChange,
 }) => {
   const { state } = useMapContext();
-  const maps = useMemo(() => {
-    if (Array.isArray(state.maps)) {
-      return state.maps.filter(Boolean);
-    }
-    return [state.map].filter(Boolean);
-  }, [state.maps, state.map]);
+  const maps = useShallowStableArray(selectMaps(state));
   const [layers, setLayers] = useState([]);
 
   const updateLayers = useCallback(() => {

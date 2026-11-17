@@ -26,6 +26,9 @@ import {
 import { labelledLayers, updateLabelLayer } from "../../map/interactions/labelLayers";
 import { focusFeature } from "../../map/interactions/featureFocus";
 import { highlightSelectedFeature } from "../../map/interactions/selectionHighlight";
+import { LEFT_PANE_ID, RIGHT_PANE_ID } from "../../map/resolveMapGrid";
+import { selectPaneData } from "../../reducers/mapSelectors";
+import { actionTypes } from "reducers";
 import "./MapLayout.css";
 import { VisualisationManager } from "./VisualisationManager";
 import { Layer } from './Layer'
@@ -315,7 +318,7 @@ const DualMaps = (props) => {
           filter.actions.forEach((action) => {
             dispatch({
               type: action.action,
-              payload: { filter, value, sides: side },
+              payload: { filter, value, panes: [side] },
             });
           });
         });
@@ -334,19 +337,27 @@ const DualMaps = (props) => {
     [isMapReady, maps, state.filters, dispatch, filterDispatch]
   );
 
-  // Run once to set the state of the map
+  // Register each side's map as its pane's once ready, and again if a page reset cleared it
+  // while the maps stayed mounted. Unregister them when they go.
+  const registeredLeft = state.mapsByPane?.[LEFT_PANE_ID];
+  const registeredRight = state.mapsByPane?.[RIGHT_PANE_ID];
   useEffect(() => {
-    if (isMapReady) {
-      dispatch({
-        type: "SET_MAP",
-        payload: { map: maps.left },
-      });
-      dispatch({
-        type: "SET_DUAL_MAPS",
-        payload: { maps: [maps.left, maps.right] },
-      });
+    if (!isMapReady) return;
+    if (maps.left && registeredLeft !== maps.left) {
+      dispatch({ type: actionTypes.SET_PANE_MAP, payload: { paneId: LEFT_PANE_ID, map: maps.left } });
     }
-  }, [isMapReady]);
+    if (maps.right && registeredRight !== maps.right) {
+      dispatch({ type: actionTypes.SET_PANE_MAP, payload: { paneId: RIGHT_PANE_ID, map: maps.right } });
+    }
+  }, [isMapReady, maps, registeredLeft, registeredRight, dispatch]);
+
+  useEffect(() => {
+    if (!maps.left || !maps.right) return undefined;
+    return () => {
+      dispatch({ type: actionTypes.REMOVE_PANE_MAP, payload: { paneId: LEFT_PANE_ID, map: maps.left } });
+      dispatch({ type: actionTypes.REMOVE_PANE_MAP, payload: { paneId: RIGHT_PANE_ID, map: maps.right } });
+    };
+  }, [maps, dispatch]);
 
   useEffect(() => {
     if (isMapReady & (state.filters.length > 0)) {
@@ -420,16 +431,22 @@ const DualMaps = (props) => {
   };
 }, [leftMap, rightMap]);
 
+  const firstVisualisation = Object.keys(state.visualisations ?? {})[0];
+  const hasData = (paneId) =>
+    (selectPaneData(state, paneId, firstVisualisation)?.length ?? 0) > 0;
+  const legendSide =
+    hasData(LEFT_PANE_ID) && !hasData(RIGHT_PANE_ID) ? LEFT_PANE_ID : RIGHT_PANE_ID;
+
   return (
     <Wrap>
       <StyledMapContainer ref={leftMapContainerRef}>
         {Object.values(state.layers).map((layer, index) => (
           <Layer key={layer.name || layer.id || index} layer={layer} />
         ))}
-        {state.leftVisualisations && <VisualisationManager
-            visualisationConfigs={state.leftVisualisations}
+        {state.visualisations && <VisualisationManager
+            visualisationConfigs={state.visualisations}
             map={maps.left}
-            left={true}
+            paneId={LEFT_PANE_ID}
           />}
       </StyledMapContainer>
       <StyledMapContainer ref={rightMapContainerRef}>
@@ -437,25 +454,15 @@ const DualMaps = (props) => {
         {Object.values(state.layers).map((layer, index) => (
           <Layer key={layer.name || layer.id || index} layer={layer} />
         ))}
-        {state.rightVisualisations && <VisualisationManager
-          visualisationConfigs={state.rightVisualisations}
+        {state.visualisations && <VisualisationManager
+          visualisationConfigs={state.visualisations}
           map={maps.right}
-          left={false}
+          paneId={RIGHT_PANE_ID}
         />}
-        {isMapReady &&
-          (state.leftVisualisations[Object.keys(state.leftVisualisations)[0]]
-            .data.length === 0 &&
-          state.rightVisualisations[Object.keys(state.rightVisualisations)[0]]
-            .data.length !== 0 ? (
-            <DynamicLegend map={maps.right} />
-          ) : state.leftVisualisations[Object.keys(state.leftVisualisations)[0]]
-              .data.length !== 0 &&
-            state.rightVisualisations[Object.keys(state.rightVisualisations)[0]]
-              .data.length === 0 ? (
-            <DynamicLegend map={maps.left} />
-          ) : (
-            <DynamicLegend map={maps.right} />
-          ))}
+        {/* The legend reads its map's layers: use the left map only when it alone has data. */}
+        {isMapReady && (
+          <DynamicLegend map={legendSide === LEFT_PANE_ID ? maps.left : maps.right} />
+        )}
       </StyledMapContainer>
     </Wrap>
   );

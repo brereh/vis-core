@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { resolveMapGrid } from "../../map/resolveMapGrid";
 import { MapLayout } from ".";
 import { AppContext, FilterContext, MapContext } from "contexts";
 import { PageContext } from "contexts";
@@ -53,12 +54,14 @@ let mockMapContext = {
     },
     metadataTables: {},
     metadataFilters: [],
+    // As MapContext leaves them: each filter knows the map panes it targets.
     filters: [
       {
         actions: [{ action: "action" }],
         filterName: "Left",
         visualisations: ["Side"],
         defaultValue: "defaultValue",
+        panes: ["left"],
       },
     ],
     map: null,
@@ -283,9 +286,10 @@ describe("MapLayout component test", () => {
           filterName: "Left",
           visualisations: ["Side"],
           defaultValue: "defaultValue",
+          panes: ["left"],
         },
         value: "defaultValue",
-        sides: "left",
+        panes: ["left"],
       },
     };
     expect(mockMapContext.dispatch).toHaveBeenCalledWith(parametersExpected);
@@ -463,6 +467,7 @@ describe("map-click filters on dual maps", () => {
       paramName: "zoneId",
       visualisations: ["Zone Pairs Side-by-Side"],
       actions: [{ action: "UPDATE_DUAL_QUERY_PARAMS" }],
+      panes: ["left", "right"],
     };
     const timePeriodFilter = {
       id: "left-time-period",
@@ -471,6 +476,7 @@ describe("map-click filters on dual maps", () => {
       paramName: "timePeriodCode",
       visualisations: ["Zone Pairs Side-by-Side"],
       actions: [{ action: "UPDATE_DUAL_QUERY_PARAMS" }],
+      panes: ["left"],
     };
     const filterContext = {
       ...mockFilterContext,
@@ -480,7 +486,11 @@ describe("map-click filters on dual maps", () => {
     const mapContext = {
       ...mockMapContext,
       dispatch: jest.fn(),
-      state: { ...mockMapContext.state, filters: [zoneFilter, timePeriodFilter] },
+      state: {
+        ...mockMapContext.state,
+        mapGrid: resolveMapGrid({ type: "DualMapLayout" }),
+        filters: [zoneFilter, timePeriodFilter],
+      },
     };
 
     render(
@@ -503,10 +513,65 @@ describe("map-click filters on dual maps", () => {
       .map(({ payload }) => payload);
 
     expect(payloads).toContainEqual(
-      expect.objectContaining({ filter: timePeriodFilter, value: "AM", sides: "left" })
+      expect.objectContaining({ filter: timePeriodFilter, value: "AM", panes: ["left"] })
     );
     expect(payloads).not.toContainEqual(
       expect.objectContaining({ filter: zoneFilter, value: 2399 })
     );
+  });
+});
+
+describe("actions that name their own target", () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it("keep the panes or sides set on the action in the page config", () => {
+    const filter = {
+      id: "scenario",
+      type: "dropdown",
+      filterName: "Scenario",
+      paramName: "scenario",
+      visualisations: ["Zone Pairs"],
+      panes: ["left", "right"],
+      actions: [
+        { action: "UPDATE_DUAL_QUERY_PARAMS", payload: { sides: "right" } },
+        { action: "UPDATE_QUERY_PARAMS", payload: { panes: ["left"] } },
+        { action: "UPDATE_PATH_PARAMS" },
+      ],
+    };
+    const mapContext = {
+      ...mockMapContext,
+      dispatch: jest.fn(),
+      state: {
+        ...mockMapContext.state,
+        mapGrid: resolveMapGrid({ type: "DualMapLayout" }),
+        filters: [filter],
+      },
+    };
+    render(
+      <ThemeProvider theme={theme}>
+        <AppContext.Provider value={mockAppContexte}>
+          <PageContext.Provider value={mockPageContext}>
+            <FilterContext.Provider value={{ ...mockFilterContext, state: { scenario: "B" } }}>
+              <MapContext.Provider value={mapContext}>
+                <MapLayout />
+              </MapContext.Provider>
+            </FilterContext.Provider>
+          </PageContext.Provider>
+        </AppContext.Provider>
+      </ThemeProvider>
+    );
+
+    const payloadsFor = (type) =>
+      mapContext.dispatch.mock.calls.map(([a]) => a).filter((a) => a.type === type).map((a) => a.payload);
+
+    payloadsFor("UPDATE_DUAL_QUERY_PARAMS").forEach((payload) => {
+      expect(payload.sides).toBe("right");
+      expect(payload.panes).toBeUndefined();
+    });
+    payloadsFor("UPDATE_QUERY_PARAMS").forEach((payload) => expect(payload.panes).toEqual(["left"]));
+    payloadsFor("UPDATE_PATH_PARAMS").forEach((payload) => expect(payload.panes).toEqual(["left", "right"]));
+    expect(payloadsFor("UPDATE_DUAL_QUERY_PARAMS").length).toBeGreaterThan(0);
+    expect(payloadsFor("UPDATE_QUERY_PARAMS").length).toBeGreaterThan(0);
+    expect(payloadsFor("UPDATE_PATH_PARAMS").length).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,6 @@
 # Map Panes Consolidation Plan
 
-Status: **proposed** · Base: upstream `Transport-for-the-North/vis-core@dev` (6e1aca5, after #366)
+Status: **in progress** · Base: upstream `Transport-for-the-North/vis-core@dev` (6e1aca5, after #366) plus the unmerged `fix/map-hover-styles` branch (85c670d), which the work is rebased onto
 
 This plan replaces the separate single-map (`Map.jsx`) and dual-map (`DualMaps.jsx`) code with one
 **map pane** that is rendered in the cells of a generic, dashboard-style grid. Single and dual map
@@ -58,7 +58,7 @@ These come from reading the code. Phase 0 pins each one down with a failing test
 5. **Copies of visualisation state.** `ADD_VISUALISATION` copies visualisations into the left and right slices once. After that, `UPDATE_LEGEND_TEXT`, `UPDATE_DISPLAY_MODE`, `UPDATE_PATH_PARAMS` and `UPDATE_QUERY_PARAMS` only touch `state.visualisations`. On a dual page:
    - the maps never see those updates
    - callout cards and `DynamicLegend` (which read `state.visualisations`) never see per-side params or data
-6. **Stale maps on navigation.** `RESET_CONTEXT` doesn't clear `map` or `maps`, and `PageSwitch` keeps the same `MapProvider` mounted for both layouts. Navigating from a dual page to a single page appears to leave `MapLayerSection` and `useLayerZoomMessage` reading removed maps.
+6. **Stale maps after a page reset.** `RESET_CONTEXT` doesn't clear `map` or `maps`. In BaseApp this doesn't show: each route has its own page component, so a page change remounts `MapProvider`. It does show wherever one provider is reused across pages (which `MapLayout`'s page-reset logic allows for): `MapLayerSection` and `useLayerZoomMessage` would keep reading removed maps. (Corrected in Phase 2.)
 7. **Every layer is set up twice.** Each dual container renders every `<Layer>`, and each `Layer` adds itself to *all* maps in `state.maps`. Tile layers are protected by the `getSource` check. GeoJSON layers aren't: both instances pass the check before their async fetch returns, so each GeoJSON layer is fetched twice for each map (four requests on a dual page) and `addSource` is called twice on each map (MapLibre throws on the second). Unmounting either instance also tears the layer down on both maps, even though the other instance still shows it.
 8. **Card stack rendered twice.** Each dual container renders a `VisualisationManager`, so the callout-card stack is rendered twice.
 9. **Missing features on dual:** spider layers, touch tap tooltips, the hover fallback on hover-capable touch devices, viewport filters, the draw control (feature select), the temporary label on pan, `visualisedFeatureIds` filtering, `STORE_CURRENT_ZOOM`, and the mobile attribution bar.
@@ -199,11 +199,11 @@ For a 1×1 page every filter targets all panes, so the single-map path is unchan
 | Action | Change |
 |---|---|
 | `UPDATE_PATH_PARAMS`, `UPDATE_QUERY_PARAMS` | Accept `payload.panes`. Implemented with `applyVisualisationParam`. |
-| `UPDATE_DUAL_PATH_PARAMS`, `UPDATE_DUAL_QUERY_PARAMS` | **Kept as aliases** (page configs name them). `sides` becomes `panes`: `"left"`, `"right"`, and `"both"` or unset (today unset means left only, which no current caller relies on: `MapLayout` always sets `sides` on dual pages). |
+| `UPDATE_DUAL_PATH_PARAMS`, `UPDATE_DUAL_QUERY_PARAMS` | **Kept as aliases** (page configs name them). They take the filter's resolved `panes`. A legacy `sides` on the action in the page config still wins: `"left"`, `"right"`, and `"both"` or unset meaning every pane. (Before, unset meant the left pane only. `MapLayout` sent no `sides` at runtime for filters on visualisations without "Side" in their name, so such filters only ever changed the left pane; see the Phase 2 result.) |
 | `UPDATE_ALL_DATA` | `{ visualisationName, data, paneId }` writes to `paneData`. `state.visualisations[vis].data` is kept as the concatenation over the panes showing `vis`. That equals today's value on single pages and today's `combinedData` on dual pages, and it is a legacy read for `DynamicLegend` and callout cards until Phase 5 moves them onto selectors. |
 | `UPDATE_PARAMETERISED_LAYER` | `separateSidePaths` becomes `separatePanePaths` (old name accepted), and `sidePaths`/`sideMissingParams` become `panePaths`/`paneMissingParams`. The write rule is the same as for params. `missingParams` is the union across the panes showing the layer, so the layer is added once none of them is missing anything. The flag stays opt-in so existing configs behave as they do today. |
 | `SET_PANE_MAP` / `REMOVE_PANE_MAP` | `{ paneId, map }`. Also keeps `state.map` pointing at the primary pane's map. |
-| `RESET_CONTEXT` | Also clears `map`, `mapsByPane`, `paneOverrides`, `paneData` and `mapGrid`. This fixes §2.2(6). |
+| `RESET_CONTEXT` | Also clears `map`, `mapsByPane`, `paneOverrides` and `paneData`. This fixes §2.2(6). `mapGrid` is left in place, because the page effect sets it again straight away. |
 | `mapBoundsAndCentroid` (set by select-and-pan) | Gains `panes` from the filter that set it. |
 
 #### Selectors: `reducers/mapSelectors.js` plus hooks
@@ -314,6 +314,7 @@ Everything not listed here should behave exactly as before. Each change is calle
 - compact attribution on both maps
 - one card stack instead of two
 - a filter that isn't side-specific and uses `UPDATE_PATH_PARAMS`/`UPDATE_QUERY_PARAMS` now affects both maps (it was silently dropped before, see §2.2(5))
+- which pane a filter targets is worked out once and used everywhere, so the same filter targets the same pane at load and afterwards (the Phase 2 result lists exactly what changes)
 - legend data comes from the classification group rather than the side with data
 
 **Single pages:**
@@ -325,7 +326,15 @@ Everything not listed here should behave exactly as before. Each change is calle
 **Both:**
 - `state.map` and the other map state are cleared when the page changes
 
-**Pre-merge check (Phase 3):** run BaseApp's dual-map pages against each change, together with the downstream app configs the maintainers have to hand. In particular, find any configs that send a non-side filter through `UPDATE_*_PARAMS` on a dual page.
+**Pre-merge check (Phase 3):** run BaseApp's dual-map pages against each change, together with the downstream app configs the maintainers have to hand. In particular, find dual-page configs that:
+- send a filter through `UPDATE_*_PARAMS`, side-specific or not
+- send a filter whose visualisation name lacks "Side" through `UPDATE_DUAL_*`
+- name a filter with "Left"/"Right" on a visualisation without "Side" in its name
+- set `sides` on a filter or on one of its actions
+- target a callout card with `UPDATE_DUAL_*`
+- are dual pages whose name doesn't contain "Side-by-Side" and that use banding or metric-dependent layer controls
+
+Also find single-map configs that use `UPDATE_DUAL_*` or `separateSidePaths`.
 
 ---
 
@@ -416,6 +425,11 @@ Behaviour pinned so later phases keep it:
   - Layer-click popups show "Value: 0" for a feature with no `state`. Before, both components threw.
   - On dual maps, a custom tooltip whose response is empty renders its template against `{}`, as the single map does. Before, it threw and showed the fallback.
   - On dual maps, each label layer updates on its own map's `zoomend`, not on either map's. The maps are synced, so this is equivalent in practice.
+- **Rebased onto `fix/map-hover-styles`.** That branch's hover changes sit in the shared modules rather than in the two components. One small difference: on dual maps the hover search's candidate check also needs a feature id and a configured layer, as the single map's does. Phase 1 drops id-less features on dual maps, so the search would otherwise stop on a feature that then shows nothing. The changes:
+  - nearest-first hover picking with the hovered feature kept (`queryHoverFeatures` in hoverTooltip.js, used by both components, with `isHoverCandidate`)
+  - `syncHoverLayers` before hover and selected state (hoverTooltip.js, selectionHighlight.js, and the single map's click selection)
+  - the tooltip offset
+  - the selected-highlight colours for the GeoJSON fallback
 - **Also fixed:** dual custom tooltips used one hover counter for both panes, bumped once per pane in the same pass. When both panes moved to new features at once, the left pane's custom data was treated as stale and never filled in. Each pane now has its own hover session.
 - **Test changes:** one existing `DualMaps.test` case stubbed `project()` to return `true`. It now returns a screen point, with its assertion unchanged. The dual hover characterisation now expects the single map's number formatting.
 
@@ -427,6 +441,39 @@ Behaviour pinned so later phases keep it:
 - The five copies of the name rules become reads of `filter.panes`.
 
 *Exit:* reducer tests are rewritten around panes, and fixes 5–6 are flipped.
+
+**Phase 2 result.** Full suite: 118 suites and 995 tests, all passing. Fixes 5 and 6 are flipped, which leaves 4 known-drift tests for Phase 3.
+
+- **New modules:**
+  - `src/map/resolveMapGrid.js` (presets only; custom grids come in Phase 4)
+  - `src/map/resolveFilterPanes.js`
+  - `src/reducers/paneState.js`: the shared-copy-or-override rule, pane data, per-pane layer paths, pane map registration
+  - `src/reducers/mapSelectors.js` and `src/hooks/usePaneVisualisation.js`
+- **State:**
+  - added: `mapGrid`, `mapsByPane`, `paneOverrides`, `paneData`
+  - removed: `leftVisualisations`, `rightVisualisations`, `maps`, `SET_DUAL_MAPS`, and the dead colour-scheme code in `SET_MAP`
+  - `SET_MAP` is kept as an alias that registers the primary pane's map
+  - `UPDATE_DUAL_*` are aliases of `UPDATE_*_PARAMS`
+  - layers use `panePaths`/`paneMissingParams`, with `separatePanePaths` accepted alongside `separateSidePaths`
+- **Consumers.** `MapContext` stores each filter's resolved `panes` and `paneScope`. `MapLayout`, the feature selectors, `DualMaps`, `Map`, `MapVisualisation`, `Layer`, `MapLayerSection`, `useLayerZoomMessage` and `LayerControlEntry` read panes and selectors.
+- **Name rules.** All five copies of the `Left`/`Right`/`Side` rules and the `pageName` rule are gone. The name rules survive only as the legacy fallback in `resolveFilterPanes`. On the dual preset, "Left"/"Right" in a filter's name targets that pane whatever the visualisation is called, as the old load-time dispatch and feature selectors did. Other filters on "Side" visualisations target both panes. (Only `LayerControlEntry`'s `pageName` rule moved here rather than in Phase 5, because removing the left/right copies forced it. It reads the primary pane's own view, which is what the left copy gave it, not the per-layer selector Phase 5 adds.)
+- **Map registration.** Maps register per pane, register again if a reset clears them while they stay mounted, and unregister on unmount.
+- **Behaviour changes on dual pages, beyond fixes 5–6.** Before, the initial dispatch applied the Left/Right name rule to every filter, but the runtime dispatch only applied it to filters on "Side" visualisations; for other filters it sent no `sides`. Each filter now has one resolved target, used in both places. In detail:
+  - A filter that isn't side-specific, using `UPDATE_*_PARAMS`, reaches both maps; before, its value never reached the maps (§4).
+  - A filter named "Left …"/"Right …" targets that pane at load and afterwards, whatever its visualisation is called. Before, on a visualisation without "Side", it targeted its side at load, then the left pane (`UPDATE_DUAL_*`) or neither map (`UPDATE_*_PARAMS`) afterwards.
+  - A side-specific filter using `UPDATE_*_PARAMS` changes its own pane; before, its value never reached the maps.
+  - `UPDATE_DUAL_*` from a filter that is neither side-specific nor on a "Side" visualisation targets both panes afterwards; before, the left pane only.
+  - A `sides` set on a filter in the page config steers its map actions, and wins over the name rules. Before, it only chose the feature-lookup side, and the name rules overwrote it on "Side" visualisations.
+  - A `sides` or `panes` set on an action in the page config wins over the filter's target, at load and afterwards. Before, it won only at load: afterwards, the name-derived side replaced it for filters on "Side" visualisations. For example, a filter named "Left …" whose action sets `sides: "both"` used to change only the left pane after load, and now changes both.
+  - A callout card targeted by `UPDATE_DUAL_*` now gets the value, on its page copy; between a Left and a Right filter, the last change wins. Before, callout cards never saw these values.
+  - Feature selects, including download-section filters that never pass through `MapContext`, pick their lookup pane with the same rules. In practice the outcome is unchanged: "Right" in the name, or `sides: "right"`, means right; otherwise left.
+  - A pane classifies over its own freshly fetched data plus the other panes' last stored data. Before, both sides came from state, one render behind.
+  - The layer controls describe the primary (left) pane, with its own params and data, and an up-to-date display mode. With no data stored yet, the left pane has none, rather than the right pane's. Before, only pages named "Side-by-Side" read the left copy; other dual pages read the page copy, which had no data and no per-side params.
+  - Map-click filters on visualisations without "Side" are no longer re-dispatched by `MapLayout`. Before, it re-sent their single value to the left pane, overwriting that pane's own clicked feature. `DualMaps` dispatches every map-click filter per side, so `MapLayout` now leaves all map-click filters to it on multi-pane pages. Phase 3 narrows this to filters that target several panes.
+- **Behaviour changes on single-map pages, from dual-only options only:**
+  - `UPDATE_DUAL_*` now applies, to the only pane; before, it wrote copies nothing read.
+  - A map-click filter on a "Side" visualisation is now also re-sent by `MapLayout`. This repeats the map's own dispatch with the same value.
+  - A `separateSidePaths` layer changed by a "Left"/"Right" filter now updates its tiles; before, the single map used the unchanged `layer.path`.
 
 ### Phase 3: `MapPane` replaces both components
 - Add `MapPane`, `MapGroupProvider`, and a `MapGrid` that supports only the presets for now.
@@ -480,6 +527,7 @@ Behaviour pinned so later phases keep it:
 | Map instances stored in reducer state | Kept, as today. Moving them into a ref-based registry (`MapGroupContext`) is a possible follow-up, not needed for this work. |
 
 **Deferred, by decision or out of scope:**
+- **Telling id-less features apart.** The hover fast path compares feature ids, so two different features without ids on one layer count as the same. A second tap on such a feature moves the popup but keeps the first feature's text. This predates the consolidation; Phase 3 could compare a key that falls back to the feature's properties or geometry.
 - **Per-pane style controls.** Move runtime style into a `layerStyles[styleKey]` slice, where `styleKey` is the layer, or layer plus pane for opted-out panes, so opted-out panes get their own entry in the layer controls.
 - **Non-map cell types**, such as charts, standalone card stacks and text. The grid's cell registry is the extension point.
 - **Per-group `currentZoom`** for zoom-gated legend sections on independent panes.

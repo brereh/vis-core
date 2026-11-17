@@ -1,4 +1,6 @@
 import { useEffect, useContext, useMemo, useRef } from "react";
+import { selectMaps, selectPaneOfMap } from "../../reducers/mapSelectors";
+import { useShallowStableArray } from "hooks/usePaneVisualisation";
 import { api } from "services";
 import {
   appendQueryParams,
@@ -42,7 +44,10 @@ import { addHoverLayers, removeHoverLayers } from "../../map/hoverStyle";
 export const Layer = ({ layer }) => {
   // Access the map context to get the current map instance(s)
   const { state, dispatch } = useMapContext();
-  const { map, maps, paramNameToUuidMap } = state;
+  const { paramNameToUuidMap } = state;
+  // The registered pane maps, kept as the same array while the maps are the same, so effects
+  // keyed on it only re-run when a map changes.
+  const paneMaps = useShallowStableArray(selectMaps(state));
 
   // Whether the dark base map is currently active
   const currentBaseMap = getBaseMap(state.baseMapId);
@@ -103,16 +108,19 @@ export const Layer = ({ layer }) => {
     return baseUrl;
   }, [layer.type, layer.source, layer.path]);
 
-  // Opt-in for dual maps (see UPDATE_PARAMETERISED_LAYER): a layer with separateSidePaths
-  // uses its left path on maps[0] and its right path on maps[1]. Other layers use layer.path.
-  const usesSidePaths = Boolean(layer.separateSidePaths && maps?.length === 2);
-  const sideOf = (mapInstance) => (mapInstance === maps?.[0] ? "left" : "right");
+  // Opt-in (see reducers/paneState.js): a layer with separatePanePaths (or the older
+  // separateSidePaths) can have a different path on each pane's map. Other layers use layer.path.
+  const usesPanePaths = Boolean(
+    (layer.separatePanePaths || layer.separateSidePaths) && layer.panePaths
+  );
   const pathForMap = (mapInstance) =>
-    usesSidePaths ? layer.sidePaths?.[sideOf(mapInstance)] ?? layer.path : layer.path;
+    usesPanePaths
+      ? layer.panePaths[selectPaneOfMap(state, mapInstance)] ?? layer.path
+      : layer.path;
   // Such a layer's path never changes, so re-add it when its params arrive; null for other layers.
-  const sidePathsMissingCount = usesSidePaths ? layer.missingParams?.length ?? 0 : null;
+  const panePathsMissingCount = usesPanePaths ? layer.missingParams?.length ?? 0 : null;
   const tileUrlForMap = (mapInstance) => {
-    if (!usesSidePaths) return computedTileUrl;
+    if (!usesPanePaths) return computedTileUrl;
     const path = pathForMap(mapInstance);
     return layer.source === "api" ? api.geodataService.buildTileLayerUrl(path) : path;
   };
@@ -120,7 +128,7 @@ export const Layer = ({ layer }) => {
 
   useEffect(() => {
     // Determine the maps to operate on
-    const targetMaps = maps || (map ? [map] : []);
+    const targetMaps = paneMaps;
 
     // If no map instances are available, exit early
     if (targetMaps.length === 0) return;
@@ -418,13 +426,13 @@ export const Layer = ({ layer }) => {
         }
       });
     };
-  }, [map, maps, layer.name, layer.path, layer.type, layer.geometryType, sidePathsMissingCount]);
+  }, [paneMaps, layer.name, layer.path, layer.type, layer.geometryType, panePathsMissingCount]);
 
   // If this is a tile layer and its computed tile URL changes,
   // update the existing source tiles in-place.
   useEffect(() => {
     if (layer.type !== "tile") return;
-    const targetMaps = maps || (map ? [map] : []);
+    const targetMaps = paneMaps;
     if (targetMaps.length === 0) return;
     if (!computedTileUrl) return;
 
@@ -577,12 +585,12 @@ export const Layer = ({ layer }) => {
 
       lastTilesUrlByMapRef.current.set(mapInstance, tileUrl);
     });
-  }, [map, maps, layer, computedTileUrl, isDarkMode]);
+  }, [paneMaps, layer, computedTileUrl, isDarkMode]);
 
 
   useEffect(() => {
     // Determine target map(s)
-    const targetMaps = maps || (map ? [map] : []);
+    const targetMaps = paneMaps;
     if (targetMaps.length === 0) return;
 
     // Update the tooltip URL dynamically based on filters
@@ -605,7 +613,7 @@ export const Layer = ({ layer }) => {
       }
     }
 
-  }, [filters, paramNameToUuidMap, map, maps, dispatch]);
+  }, [filters, paramNameToUuidMap, paneMaps, dispatch]);
   
   // This component does not render any visible elements
   return null;
